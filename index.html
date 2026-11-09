@@ -189,6 +189,7 @@ function renderTop(r){
     var home = u.role === 'admin' ? '#/admin' : '#/de-cu';
     html += '<div class="who"><div class="n"><b>' + esc(u.name) + '</b><span>' + esc((ROLE[u.leaderType] || 'Leader') + (u.role === 'admin' ? '' : ' · ' + u.unit)) + '</span></div>' +
       (area === 'public' && u && u.role === 'admin' ? '<a class="btn btn2" href="' + home + '">Dashboard</a>' : '') +
+      (area === 'admin' ? '<button class="btn btn2" data-act="refreshData" title="Tải lại dữ liệu mới nhất">↻ Làm mới</button>' : '') +
       '<button class="btn btn2" data-act="logout">Đăng xuất</button></div>';
   }
   document.getElementById('top').innerHTML = html;
@@ -202,14 +203,14 @@ function render(){
   var v = VIEWS[r] || VIEWS['/'];
   var need = v.need;
   if (need && (!S.sess || (need !== 'any' && S.sess.user.role !== need))) { app.innerHTML = '<div class="card empty"><p>Bạn cần đăng nhập ' + (need === 'admin' ? 'bằng tài khoản Admin' : 'bằng tài khoản Team Leader / Sales Sub-team Leader') + ' để xem trang này.</p><a class="btn" href="#/dang-nhap">Đăng nhập</a></div>'; return; }
-  app.innerHTML = '<p class="muted">Đang tải…</p>';
+  app.innerHTML = '<div class="card empty"><p style="margin:0">Đang tải dữ liệu…</p></div>';
   Promise.resolve(v.load ? v.load() : null).then(function(){ app.innerHTML = v.view(); if (v.after) v.after(); })
     .catch(function(e){ app.innerHTML = '<div class="card empty"><p>' + esc(e.message) + '</p><button class="btn btn2" data-act="reload">Thử lại</button></div>'; if (/mã đăng nhập không đúng/.test(e.message)) { save(null); renderTop(r); } });
 }
 function refresh(){ var r = route(); var v = VIEWS[r] || VIEWS['/']; document.getElementById('app').innerHTML = v.view(); if (v.after) v.after(); }
 
 /* ---------- Public ---------- */
-function loadPub(){ return api('candidates', {}, true).then(function(d){ S.pub = d; }); }
+function loadPub(force){ if (!force && S.pub && Date.now() - (S.pubAt || 0) < 60000) return Promise.resolve(); return api('candidates', {}, true).then(function(d){ S.pub = d; S.pubAt = Date.now(); }); }
 function keyDates(c){
   var idx = { upcoming:-1, nomination:0, review:0.5, voting:1, closed:2 }[c.phase];
   var items = [[c.nominationStart.split(' ')[0] + '–' + c.nominationEnd.split(' ')[0], 'Đề cử'], [c.votingStart.split(' ')[0] + '–' + c.votingEnd.split(' ')[0], 'Chấm điểm'], [c.finalizeDate, 'Chốt kết quả'], [c.ceremonyDate, 'Lễ trao giải']];
@@ -353,7 +354,7 @@ function modal(html){ var l = document.getElementById('layer'); l.innerHTML = '<
 function closeModal(){ document.getElementById('layer').innerHTML = ''; }
 
 /* ---------- Admin ---------- */
-function loadAdmin(){ return api('adminData', {}, true).then(function(d){ S.admin = d; }); }
+function loadAdmin(force){ if (!force && S.admin && Date.now() - (S.adminAt || 0) < 60000) return Promise.resolve(); return api('adminData', {}, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); S.adminAt = Date.now(); }); }
 function viewAdmin(){
   var d = S.admin, c = d.cycle, s = d.settingsRaw;
   var active = d.nominations.filter(function(n){ return n.status === 'pending' || n.status === 'approved'; });
@@ -413,11 +414,10 @@ function viewVotes(){
 }
 function viewRank(){
   var d = S.admin, s = d.settingsRaw; S.openRank = S.openRank || {};
-  var crit = '<section class="card" style="display:flex;flex-direction:column;gap:10px"><h2 class="sec">Cách xếp hạng & tính điểm</h2>' +
-    '<div>1. Xếp theo <b>số lượt vote</b> (số leader đã chấm) từ nhiều đến ít.</div><div>2. Nếu số lượt vote bằng nhau: so <b>điểm trung bình</b>, cao hơn xếp trên.</div><div>3. Vẫn bằng: ưu tiên điểm Impact & Contribution cao hơn.</div>' +
-    '<div class="muted small">Điểm 1 phiếu = Σ (điểm tiêu chí ÷ 5 × trọng số) → thang 100. VD: 5-4-4-3 → 35 + 24 + 16 + 9 = 84.</div>' +
-    '<label class="check" style="background:var(--light);border-radius:10px;padding:12px 14px"><input type="checkbox" data-change="incSelf"' + (s.includeSelf ? ' checked' : '') + '> <span>Tính cả điểm tự đánh giá của team đề cử vào điểm trung bình<br><span class="muted small" style="font-weight:400">Khi bật, mức tự đánh giá của leader đề cử được tính như 1 phiếu trong điểm trung bình (không cộng vào số lượt vote).</span></span></label>' +
-    '<h2 class="sec" style="margin-top:6px">Tiêu chí</h2>' + CRIT.map(function(k){ return '<div><b style="color:var(--royal)">' + k[2] + ' · ' + k[3] + '%</b><div class="muted small">' + k[4] + '</div></div>'; }).join('') + '</section>';
+  var crit = '<section class="card" style="display:flex;flex-direction:column;gap:10px;padding:18px 22px"><div class="between"><h2 class="sec">Cách xếp hạng</h2>' +
+    '<span class="row" style="gap:6px;align-items:center;flex:0 1 auto">' + ['Số lượt vote','Điểm TB','Điểm Impact'].map(function(x, i){ return '<span style="flex:0 0 auto">' + chip(i ? 'off' : '', (i+1) + '. ' + x) + '</span>'; }).join('<span style="flex:0 0 auto" class="muted">→</span>') + '</span></div>' +
+    '<div class="small muted">Điểm 1 phiếu = Σ (điểm ÷ 5 × trọng số), thang 100 · Tiêu chí: ' + CRIT.map(function(k){ return '<b style="color:var(--royal)">' + k[2] + ' ' + k[3] + '%</b>'; }).join(' · ') + '</div>' +
+    '<label class="check small" style="margin:0"><input type="checkbox" data-change="incSelf"' + (s.includeSelf ? ' checked' : '') + '> Tính cả điểm tự đánh giá của team đề cử vào điểm TB (như 1 phiếu, không cộng vào số lượt vote)</label></section>';
   var rows = d.ranking.map(function(r){ var tie = d.ranking.some(function(o){ return o !== r && o.judges === r.judges && o.score === r.score; }); var tieVotes = d.ranking.some(function(o){ return o !== r && o.judges === r.judges; });
     var open = S.openRank[r.id]; var vs = d.votes.filter(function(v){ return v.nominationId === r.id; });
     var main = '<tr' + (r.rank === 1 && r.judges ? ' class="hl"' : (open ? ' class="sel"' : '')) + '><td><b>' + r.rank + '</b></td><td><button class="link" data-act="toggleRank" data-id="' + esc(r.id) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + (open ? '▾ ' : '▸ ') + esc(r.candidateName) + '</button><div class="muted small">' + esc(r.title) + '</div></td><td>' + esc(r.unit) + '</td><td><b style="font-size:16px">' + r.judges + '</b></td><td>' + r.avg.c1 + '</td><td>' + r.avg.c2 + '</td><td>' + r.avg.c3 + '</td><td>' + r.avg.c4 + '</td><td><b style="color:var(--royal)">' + r.score + '</b></td><td>' + (r.selfScore == null ? '—' : r.selfScore) + '</td><td>' +
@@ -542,7 +542,8 @@ function busy(btn, on){ if (!btn) return; btn.disabled = on; if (on) { btn.datas
 function showErr(id, m){ var el = document.getElementById(id); if (el) el.innerHTML = m ? '<div class="err">' + esc(m) + '</div>' : ''; else if (m) toast(m); }
 var ACT = {
   reload: render,
-  logout: function(){ save(null); S.home = S.ballot = S.admin = null; S.sel = []; S.scores = {}; S.notes = {}; go('#/'); },
+  refreshData: function(el){ S.admin = null; S.pub = null; busy(el, true); render(); },
+  logout: function(){ save(null); S.home = S.ballot = S.admin = S.pub = null; S.sel = []; S.scores = {}; S.notes = {}; go('#/'); },
   demoReset: function(){ ensureDemo().then(function(){ MockAPI.reset(false); save(null); S.sel = []; S.scores = {}; S.notes = {}; toast('Đã reset: chưa có đề cử nào.'); go('#/'); }); },
   demoSample: function(){ ensureDemo().then(function(){ MockAPI.reset(true); save(null); S.sel = []; S.scores = {}; S.notes = {}; toast('Đã nạp 6 đề cử và vài phiếu chấm mẫu.'); go('#/'); }); },
   team: function(el){ S.team = el.dataset.v; refresh(); },
@@ -559,7 +560,7 @@ var ACT = {
   cancelEdit: function(){ S.editNom = false; refresh(); },
   review: function(el){ var st = el.dataset.s; var note = (document.getElementById('hrnote') || {}).value;
     if (st === 'hidden' && !String(note || '').trim()) { toast('Nhập ghi chú để leader biết lý do ẩn.'); var t = document.getElementById('hrnote'); if (t) t.focus(); return; }
-    busy(el, true); api('adminReview', { id: S.selNom, status: st, note: note }, true).then(function(d){ S.admin = d; refresh(); toast(st === 'approved' ? 'Đã hiện lại đề cử.' : 'Đã ẩn đề cử.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
+    busy(el, true); api('adminReview', { id: S.selNom, status: st, note: note }, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); refresh(); toast(st === 'approved' ? 'Đã hiện lại đề cử.' : 'Đã ẩn đề cử.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
   exportVotes: function(){ var d = S.admin; csv('phieu-cham-' + d.cycle.cycleName.replace(/\W+/g, '-') + '.csv', [['Giám khảo','Domain','Team giám khảo','Ứng viên','Team ứng viên','Performance','Impact','Ownership','Innovation','Tổng /100','Lý do','Gửi lúc']].concat(d.votes.map(function(v){ return [v.voterName, v.voterDomain, v.voterUnit, v.candidateName, v.candidateUnit, v.c1, v.c2, v.c3, v.c4, v.total, v.comment, fmtTime(v.createdAt)]; }))); },
   exportUsers: function(){ csv('leader-ma-dang-nhap.csv', [['Họ tên','Domain','Vai trò','Team','Mã đăng nhập']].concat(S.admin.users.map(function(u){ return [u.name, u.domain, ROLE[u.role] || u.role, u.unit, u.accessCode]; }))); },
   peek: function(el){ S.peek[el.dataset.id] = !S.peek[el.dataset.id]; refresh(); },
@@ -568,7 +569,7 @@ var ACT = {
   cancelEmp: function(){ S.editEmp = null; refresh(); },
   empAll: function(){ S.empAll = true; refresh(); },
   delNom: function(el){ var n = S.admin.nominations.filter(function(x){ return x.id === S.selNom; })[0]; if (!n || !confirm('Xoá đề cử ' + n.candidateName + '? Lượt quota được trả lại cho team; phiếu chấm cho người này sẽ không còn được tính.')) return;
-    busy(el, true); api('adminDelete', { id: S.selNom }, true).then(function(d){ S.admin = d; S.selNom = null; refresh(); toast('Đã xoá đề cử ' + n.candidateName + '.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
+    busy(el, true); api('adminDelete', { id: S.selNom }, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); S.selNom = null; refresh(); toast('Đã xoá đề cử ' + n.candidateName + '.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
   empTeamToggle: function(el){ S.empOpen = S.empOpen || {}; S.empOpen[el.dataset.id] = !S.empOpen[el.dataset.id]; refresh(); },
   empOpenAll: function(el){ S.empOpen = {}; if (el.dataset.v === '1') S.admin.employees.forEach(function(e){ S.empOpen[e.unit] = true; }); refresh(); },
   toggleRank: function(el){ S.openRank = S.openRank || {}; S.openRank[el.dataset.id] = !S.openRank[el.dataset.id]; refresh(); },
@@ -576,7 +577,7 @@ var ACT = {
     var mode = (document.querySelector('input[name=impmode]:checked') || {}).value || 'replace';
     if (mode === 'replace' && !confirm('Thay toàn bộ danh sách hiện tại (' + S.admin.employeeCount + ' người) bằng ' + p.rows.length + ' người mới?')) return;
     var me = S.sess.domain; if (mode === 'replace' && !p.rows.some(function(r){ return r.domain === me && ROLE_IN(r.role) === 'admin'; })) { toast('Danh sách mới phải có domain của bạn (' + me + ') với vai trò Admin, nếu không bạn sẽ mất quyền đăng nhập.'); return; }
-    busy(el, true); api('adminImport', { rows: p.rows, mode: mode }, true).then(function(d){ S.admin = d; S.imp = null; refresh(); toast('Đã import ' + d.importSummary.total + ' người, tạo ' + d.importSummary.created + ' mã đăng nhập mới.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
+    busy(el, true); api('adminImport', { rows: p.rows, mode: mode }, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); S.imp = null; refresh(); toast('Đã import ' + d.importSummary.total + ' người, tạo ' + d.importSummary.created + ' mã đăng nhập mới.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
   copy: function(el){ (navigator.clipboard ? navigator.clipboard.writeText(el.dataset.v) : Promise.reject()).then(function(){ toast('Đã copy mã.'); }, function(){ toast('Không copy được, hãy bôi đen và copy thủ công.'); }); }
 };
 document.addEventListener('click', function(e){ var el = e.target.closest('[data-act]'); if (!el || el.disabled) return; e.preventDefault(); ACT[el.dataset.act](el); });
@@ -595,7 +596,7 @@ document.addEventListener('change', function(e){
   if (el.dataset.change === 'impfile' && el.files[0]) { readImportFile(el.files[0]); }
   if (el.dataset.change === 'empTeam') { S.empTeam = el.value; refresh(); }
   if (el.dataset.change === 'rlev') { var n = Number(el.value), dd = document.getElementById(el.dataset.k + '-d'); if (dd) dd.innerHTML = '<b style="color:var(--ink)">' + n + ' · ' + SCALE[n-1][0] + '</b><br>' + SCALE[n-1][1]; }
-  if (el.dataset.change === 'incSelf') { S.includeSelf = el.checked; el.disabled = true; loadAdmin().then(refresh).catch(function(e){ toast(e.message); }); }
+  if (el.dataset.change === 'incSelf') { S.includeSelf = el.checked; el.disabled = true; loadAdmin(true).then(refresh).catch(function(e){ toast(e.message); }); }
   if (el.dataset.change === 'ack') document.getElementById('sendVote').disabled = !el.checked;
   if (el.dataset.change === 'demoNow') ensureDemo().then(function(){ MockAPI.setNow(el.value); location.reload(); });
 });
@@ -615,15 +616,15 @@ document.addEventListener('submit', function(e){
     var miss = need.filter(function(x){ return !fd[x[0]]; });
     if (miss.length) { showErr('ferr', 'Vui lòng nhập: ' + miss.map(function(x){ return x[1]; }).join(', ') + '.'); var fe = document.getElementById(miss[0][0]) || form.querySelector('[name=' + miss[0][0] + ']'); if (fe) fe.focus(); return; }
     busy(btn, true); showErr('ferr', '');
-    api('submitNomination', { data: fd }, true).then(function(d){ S.home = d; toast('Đã gửi đề cử. Đề cử đang hiển thị trên trang ứng viên.'); go('#/de-cu'); }).catch(function(err){ busy(btn, false); showErr('ferr', err.message); });
+    api('submitNomination', { data: fd }, true).then(function(d){ S.home = d; S.pub = null; toast('Đã gửi đề cử. Đề cử đang hiển thị trên trang ứng viên.'); go('#/de-cu'); }).catch(function(err){ busy(btn, false); showErr('ferr', err.message); });
   }
   if (kind === 'editEmp') {
     fd.active = !!form.querySelector('[name=active]').checked;
     if (!fd.domain || !fd.name || !fd.unit) { toast('Domain, họ tên và team không được trống.'); return; }
-    busy(btn, true); api('adminUpdateEmployee', { domainKey: form.dataset.key, data: fd }, true).then(function(d){ S.admin = d; S.editEmp = null; refresh(); toast('Đã lưu thông tin ' + fd.name + '.'); }).catch(function(err){ busy(btn, false); toast(err.message); });
+    busy(btn, true); api('adminUpdateEmployee', { domainKey: form.dataset.key, data: fd }, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); S.editEmp = null; refresh(); toast('Đã lưu thông tin ' + fd.name + '.'); }).catch(function(err){ busy(btn, false); toast(err.message); });
   }
   if (kind === 'editNom') {
-    busy(btn, true); api('adminEdit', { id: S.selNom, data: fd }, true).then(function(d){ S.admin = d; S.editNom = false; refresh(); toast('Đã lưu nội dung.'); }).catch(function(err){ busy(btn, false); toast(err.message); });
+    busy(btn, true); api('adminEdit', { id: S.selNom, data: fd }, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); S.editNom = false; refresh(); toast('Đã lưu nội dung.'); }).catch(function(err){ busy(btn, false); toast(err.message); });
   }
 });
 window.addEventListener('hashchange', function(){ closeModal(); S.editNom = false; render(); window.scrollTo(0, 0); });
