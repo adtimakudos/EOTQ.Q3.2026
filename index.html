@@ -244,7 +244,7 @@ function candCard(c){
 }
 function voteBtn(c){
   var u = S.sess && S.sess.user; if (!u || u.role !== 'leader' || !canVote(S.pub.cycle)) return '';
-  if (c.unit === u.unit) return '<span class="muted small" style="flex:1 1 auto">Cùng team với bạn: không chấm được.</span>';
+  if (myUnit(u, c)) return '<span class="muted small" style="flex:1 1 auto">Cùng team với bạn: không chấm được.</span>';
   return '<button class="btn sm" style="flex:0 0 auto" data-act="voteFor" data-id="' + esc(c.id) + '">Chấm điểm người này →</button>';
 }
 function viewChooser(){
@@ -258,7 +258,7 @@ function viewCandidates(){
   var q = S.q.toLowerCase();
   var list = d.candidates.filter(function(x){ return (S.team === 'all' || x.unit === S.team) && (!q || (x.candidateName + ' ' + x.unit + ' ' + x.title).toLowerCase().indexOf(q) >= 0); });
   return '<div class="stack">' +
-    '<div class="between"><h2 class="sec">Danh sách bình chọn</h2>' + chip('off', d.candidates.length + ' ứng viên · ' + teams.length + ' team') + '</div>' +
+    '<div class="between"><h2 class="sec">Danh sách bình chọn</h2><div class="row" style="gap:8px;align-items:center">' + chip('off', d.candidates.length + ' ứng viên · ' + teams.length + ' team') + '<button class="btn btn2 sm" data-act="openAll">Xem chi tiết tất cả</button><button class="btn btn2 sm" data-act="closeAll">Thu gọn tất cả</button></div></div>' +
     '<div class="between"><div class="row" style="gap:8px;flex:1 1 400px" role="group" aria-label="Lọc theo team"><button class="chip ' + (S.team === 'all' ? '' : 'off') + '" style="flex:0 0 auto" data-act="team" data-v="all" aria-pressed="' + (S.team === 'all') + '">Tất cả team</button>' +
     teams.map(function(t){ return '<button class="chip ' + (S.team === t ? '' : 'off') + '" style="flex:0 0 auto" data-act="team" data-v="' + esc(t) + '" aria-pressed="' + (S.team === t) + '">' + esc(t) + '</button>'; }).join('') + '</div>' +
     '<div style="flex:0 1 320px"><label class="lbl" for="q">Tìm kiếm</label><input id="q" class="in" data-input="q" placeholder="Tên ứng viên, team, title…" value="' + esc(S.q) + '"></div></div>' +
@@ -311,33 +311,37 @@ function viewHome(){
 /* ---------- Leader ---------- */
 function loadHome(force){ return loadLeaderAll(force); }
 function phaseBanner(c, extra){ return '<div class="banner">' + chip(canNom(c) || canVote(c) ? '' : 'off', PHASE[c.phase]) + '<p>' + extra + '</p></div>'; }
+function curTeam(d){ var ts = d.teams && d.teams.length ? d.teams : [d.team]; var t = ts.filter(function(x){ return x.unit === S.nomUnit; })[0]; return t || ts[0]; }
+function teamPick(d){ if (!d.teams || d.teams.length < 2) return ''; var cu = curTeam(d).unit;
+  return '<div class="row" style="gap:8px;align-items:center" role="group" aria-label="Chọn team để đề cử"><span class="muted small" style="flex:0 0 auto">Bạn phụ trách ' + d.teams.length + ' team, quota tính riêng từng team:</span>' + d.teams.map(function(x){ return '<button class="chip ' + (x.unit === cu ? '' : 'off') + '" style="flex:0 0 auto" data-act="nomTeam" data-v="' + esc(x.unit) + '" aria-pressed="' + (x.unit === cu) + '">' + esc(x.unit) + ' · ' + x.used + '/' + x.quotaMax + '</button>'; }).join('') + '</div>'; }
+function myUnit(u, c){ var mu = (u.units && u.units.length) ? u.units : [u.unit]; return [c.unit].concat(c.cunits || []).some(function(x){ return mu.indexOf(x) >= 0; }); }
 function viewLeader(){
-  var d = S.home, c = d.cycle, t = d.team, canN = canNom(c) && t.used < t.quotaMax;
+  var d = S.home, c = d.cycle, t = curTeam(d), canN = canNom(c) && t.used < t.quotaMax;
   var msg = { test:'Môi trường TEST: đề cử và chấm điểm luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', review:'Đã đóng đề cử. Chấm điểm mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Chấm điểm đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đợt đã kết thúc.' }[c.phase];
   var pct = Math.min(100, Math.round(t.used / t.quotaMax * 100));
-  return '<div class="stack">' + phaseBanner(c, msg) +
+  return '<div class="stack">' + phaseBanner(c, msg) + teamPick(d) +
     '<div class="row"><div class="card stat"><small>Team của bạn</small><b>' + esc(t.unit) + '</b><span class="muted small">' + esc(ROLE[d.me.leaderType] || 'Leader') + '</span></div>' +
     '<div class="card stat"><small>Nhân sự (FTE + CTV)</small><b>' + (t.headcount || '—') + '</b><span class="muted small">Tự đếm từ danh sách nhân viên</span></div>' +
     '<div class="card stat"><small>Quota đề cử</small><b>Tối thiểu 01 · Tối đa ' + String(t.quotaMax).padStart(2,'0') + '</b><span class="muted small">Tối thiểu 1, tối đa 10% số lượng nhân viên (nếu là số thập phân, làm tròn xuống). Team bạn: 10% × ' + t.headcount + ' = ' + (t.headcount/10).toLocaleString('vi-VN') + ' → ' + t.quotaMax + '.</span></div></div>' +
     '<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="between"><b style="font-size:15px">Đã gửi ' + t.used + '/' + t.quotaMax + ' đề cử</b>' + (t.used >= 1 ? chip('ok','Đạt tối thiểu') : chip('wait','Chưa đề cử')) + '</div><div class="bar" role="progressbar" aria-valuenow="' + t.used + '" aria-valuemin="0" aria-valuemax="' + t.quotaMax + '"><i style="width:' + pct + '%"></i></div>' +
     '<div class="between"><span class="muted small">' + (t.used >= t.quotaMax ? 'Đã dùng hết quota. Muốn đổi ứng viên: rút một đề cử rồi gửi lại (trong thời gian đề cử).' : 'Bạn còn ' + (t.quotaMax - t.used) + ' lượt đề cử.') + '</span>' +
     (canN ? '<a class="btn" href="#/de-cu/moi">+ Đề cử ứng viên</a>' : '<button class="btn" disabled>+ Đề cử ứng viên</button>') + '</div></div>' +
-    '<h2 class="sec">Đề cử của team</h2>' + (d.nominations.length ? '<div class="tbl"><table><thead><tr><th>Ứng viên</th><th>Title</th><th>Gửi lúc</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>' +
-    d.nominations.map(function(n){ var canW = canNom(c) && n.status !== 'withdrawn';
+    '<h2 class="sec">Đề cử của team</h2>' + (d.nominations.filter(function(n){ return n.unit === t.unit; }).length ? '<div class="tbl"><table><thead><tr><th>Ứng viên</th><th>Title</th><th>Gửi lúc</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>' +
+    d.nominations.filter(function(n){ return n.unit === t.unit; }).map(function(n){ var canW = canNom(c) && n.status !== 'withdrawn';
       return '<tr><td><b>' + esc(n.candidateName) + '</b><div class="muted small">' + esc(n.candidateDomain) + ' · đề cử bởi ' + esc(n.nominatorName) + '</div></td><td>' + esc(n.title) + '</td><td>' + fmtTime(n.createdAt) + '</td><td>' + stChip(n.status) + (n.hrNote ? '<div class="small" style="margin-top:4px">HR: ' + esc(n.hrNote) + '</div>' : '') + '</td><td>' + (canW ? '<button class="link" data-act="withdraw" data-id="' + esc(n.id) + '">Rút đề cử</button>' : '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="card empty">Team chưa có đề cử nào.</div>') +
     '<div class="card between"><div><b style="font-size:15px">Chấm điểm: ' + esc(c.votingStart) + ' – ' + esc(c.votingEnd) + '</b><div class="muted small">Bạn có tối đa 2 lượt chấm cho ứng viên team khác, chấm từng người. Phiếu đã gửi không sửa được.</div></div><a class="btn btn2" href="#/cham-diem">Đến trang chấm điểm</a></div></div>';
 }
 function viewForm(){
-  var d = S.home, c = d.cycle, t = d.team;
+  var d = S.home, c = d.cycle, t = curTeam(d);
   if (!canNom(c)) return '<div class="card empty"><p>Hiện không trong thời gian đề cử.</p><a class="btn btn2" href="#/de-cu">Quay lại</a></div>';
   if (t.used >= t.quotaMax) return '<div class="card empty"><p>Team đã dùng hết quota đề cử (' + t.quotaMax + ').</p><a class="btn btn2" href="#/de-cu">Quay lại</a></div>';
   function area(id, label, hint, max, rows){ return '<div><label class="lbl" for="' + id + '">' + label + '</label><div class="muted small" style="margin:-2px 0 6px">' + hint + '</div><textarea class="in" id="' + id + '" name="' + id + '" maxlength="' + max + '" data-count="' + max + '" rows="' + rows + '" required></textarea><div class="cnt" id="' + id + '-c">0 / ' + max.toLocaleString('vi-VN') + ' ký tự</div></div>'; }
-  return '<div class="stack"><a href="#/de-cu">← Quay lại Đề cử</a><div class="banner">' + chip('wait','Còn ' + (t.quotaMax - t.used) + ' lượt') + '<p>Bạn đã gửi ' + t.used + '/' + t.quotaMax + ' đề cử. Sau khi gửi, đề cử hiển thị ngay trên trang ứng viên.</p></div>' +
+  return '<div class="stack"><a href="#/de-cu">← Quay lại Đề cử</a>' + teamPick(d) + '<div class="banner">' + chip('wait','Còn ' + (t.quotaMax - t.used) + ' lượt') + '<p>Bạn đã gửi ' + t.used + '/' + t.quotaMax + ' đề cử. Sau khi gửi, đề cử hiển thị ngay trên trang ứng viên.</p></div>' +
     '<div class="two"><form class="card" style="display:flex;flex-direction:column;gap:18px;padding:32px" data-submit="nominate" novalidate><h1 class="sec">Gửi đề cử</h1>' +
     '<h2 class="part" style="border:0;padding:0">I. Thông tin ứng viên</h2>' +
     '<div class="row"><div><label class="lbl" for="f1">Team của bạn</label><input class="in" id="f1" readonly value="' + esc(t.unit) + '"></div><div><label class="lbl" for="f2">Domain của bạn</label><input class="in" id="f2" readonly value="' + esc(d.me.domain) + '"></div></div>' +
     '<div><label class="lbl" for="candidateDomain">Domain của người bạn muốn đề cử *</label><input class="in" id="candidateDomain" name="candidateDomain" list="members" autocomplete="off" placeholder="VD: tuanlq" data-input="cand" required><datalist id="members">' +
-    d.members.filter(function(m){ return m.domain !== d.me.domain; }).map(function(m){ return '<option value="' + esc(m.domain) + '">' + esc(m.name + ' · ' + m.title) + '</option>'; }).join('') + '</datalist><div class="match" id="cmatch"><span class="muted">Họ tên và title sẽ tự hiện theo danh sách nhân viên của HR.</span></div></div>' +
+    d.members.filter(function(m){ return m.domain !== d.me.domain && (!m.units || m.units.indexOf(t.unit) >= 0); }).map(function(m){ return '<option value="' + esc(m.domain) + '">' + esc(m.name + ' · ' + m.title) + '</option>'; }).join('') + '</datalist><div class="match" id="cmatch"><span class="muted">Họ tên và title sẽ tự hiện theo danh sách nhân viên của HR.</span></div></div>' +
     area('sow','SOW (phạm vi công việc) *','Phạm vi công việc chính của ứng viên trong quý.',1000,4) +
     '<h2 class="part">II. Lý do đề cử: nêu rõ minh chứng</h2><p class="muted small" style="margin:-8px 0 0">Với mỗi tiêu chí: chọn mức đánh giá 1–5 và liệt kê minh chứng cụ thể.</p>' +
     CRIT.map(function(k, i){ var rk = RK[k[1]];
@@ -568,7 +572,7 @@ function employeeTable(){
   var tmap = {}; d.teams.forEach(function(x){ tmap[x.unit] = x; }); var lastU = null;
   var roleSel = function(v){ return '<select class="in" name="role" style="min-height:40px;padding:6px 10px">' + [['employee','Nhân viên'],['leader','Team Leader'],['subleader','Sub-team Leader'],['admin','Admin']].map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === v ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; };
   var inp = function(n, v){ return '<input class="in" name="' + n + '" value="' + esc(v) + '" maxlength="120" style="min-height:40px;padding:6px 10px" aria-label="' + n + '">'; };
-  return '<div class="between"><h2 class="sec">Danh sách nhân viên đã import</h2><div class="row" style="gap:8px;align-items:center"><span style="flex:0 0 auto">' + chip('off', list.length + ' / ' + d.employees.length + ' người') + '</span><button class="link small" style="flex:0 0 auto" data-act="empOpenAll" data-v="1">Mở tất cả</button><button class="link small" style="flex:0 0 auto" data-act="empOpenAll" data-v="0">Thu gọn tất cả</button></div></div>' +
+  return '<div class="between"><h2 class="sec">Danh sách nhân viên đã import</h2><div class="row" style="gap:8px;align-items:center"><span style="flex:0 0 auto">' + chip('off', list.length + ' / ' + d.employees.length + ' dòng') + '</span><button class="link small" style="flex:0 0 auto" data-act="empOpenAll" data-v="1">Mở tất cả</button><button class="link small" style="flex:0 0 auto" data-act="empOpenAll" data-v="0">Thu gọn tất cả</button></div></div>' +
     '<div class="row" style="gap:12px;align-items:flex-end"><div style="flex:1 1 280px"><label class="lbl" for="empq">Tìm kiếm</label><input class="in" id="empq" data-input="empq" placeholder="Domain, họ tên, title…" value="' + esc(S.empQ || '') + '"></div>' +
     '<div style="flex:0 1 260px"><label class="lbl" for="empt">Team</label><select class="in" id="empt" data-change="empTeam"><option value="all">Tất cả team</option>' + units.map(function(u){ return '<option' + (u === t ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('') + '</select></div></div>' +
     '<div class="tbl"><table><thead><tr><th>Domain</th><th>Họ tên</th><th>Title</th><th>Team / sub-team</th><th>Vai trò</th><th>Trạng thái</th><th></th></tr></thead><tbody>' +
@@ -582,7 +586,7 @@ function employeeTable(){
       if (!(auto || S.empOpen[e.unit])) return head;
       return head + (function(){
       if (S.editEmp === e.domain) return '<tr class="sel"><td colspan="7"><form data-submit="editEmp" data-key="' + esc(e.domain) + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end">' +
-        '<label><span class="lbl">Domain</span>' + inp('domain', e.domain) + '</label><label><span class="lbl">Họ tên</span>' + inp('name', e.name) + '</label><label><span class="lbl">Title</span>' + inp('title', e.title) + '</label><label><span class="lbl">Team</span>' + inp('unit', e.unit) + '</label><label><span class="lbl">Vai trò</span>' + roleSel(e.role) + '</label>' +
+        '<label><span class="lbl">Domain</span>' + inp('domain', e.domain) + '</label><label><span class="lbl">Họ tên</span>' + inp('name', e.name) + '</label><label><span class="lbl">Title</span>' + inp('title', e.title) + '</label><label><span class="lbl">Team</span>' + inp('unit', e.unitAll || e.unit) + '</label><label><span class="lbl">Vai trò</span>' + roleSel(e.role) + '</label>' +
         '<label class="check small" style="align-self:center"><input type="checkbox" name="active"' + (e.active ? ' checked' : '') + '> Đang hoạt động</label><div class="row" style="gap:8px"><button type="button" class="btn btn2 sm" data-act="cancelEmp">Huỷ</button><button class="btn sm" type="submit">Lưu</button></div></form></td></tr>';
       return '<tr' + (e.active ? '' : ' class="warn"') + '><td>' + esc(e.domain) + '</td><td><b>' + esc(e.name) + '</b></td><td>' + esc(e.title) + '</td><td>' + esc(e.unit) + '</td><td>' + (e.role === 'admin' ? chip('gold','Admin') : e.role === 'employee' ? chip('off','Nhân viên') : chip('', ROLE[e.role])) + '</td><td>' + (e.active ? chip('ok','Hoạt động') : chip('off','Đã khoá')) + '</td><td><button class="link" data-act="editEmp" data-id="' + esc(e.domain) + '">Sửa</button></td></tr>'; })(); }).join('') : '<tr><td colspan="7" class="muted">Không có nhân viên khớp bộ lọc.</td></tr>') + '</tbody></table></div>' +
 
@@ -617,6 +621,9 @@ var ACT = {
   demoReset: function(){ ensureDemo().then(function(){ MockAPI.reset(false); save(null); S.sel = []; S.scores = {}; S.notes = {}; toast('Đã reset: chưa có đề cử nào.'); go('#/'); }); },
   demoSample: function(){ ensureDemo().then(function(){ MockAPI.reset(true); save(null); S.sel = []; S.scores = {}; S.notes = {}; toast('Đã nạp 6 đề cử và vài phiếu chấm mẫu.'); go('#/'); }); },
   team: function(el){ S.team = el.dataset.v; refresh(); },
+  nomTeam: function(el){ S.nomUnit = el.dataset.v; refresh(); },
+  openAll: function(){ S.open = {}; (S.pub.candidates || []).forEach(function(x){ S.open[x.id] = true; }); var y = window.scrollY; refresh(); window.scrollTo(0, y); },
+  closeAll: function(){ S.open = {}; var y = window.scrollY; refresh(); window.scrollTo(0, y); },
   toggleOpen: function(el){ S.open = S.open || {}; S.open[el.dataset.id] = !S.open[el.dataset.id]; var y = window.scrollY; refresh(); window.scrollTo(0, y); },
   withdraw: function(el){ if (!confirm('Rút đề cử này? Lượt quota sẽ được trả lại.')) return; busy(el, true); api('withdrawNomination', { id: el.dataset.id }, true).then(function(d){ S.home = d; refresh(); toast('Đã rút đề cử.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
   pick: function(el){ var id = el.dataset.id, i = S.sel.indexOf(id); if (i >= 0) S.sel.splice(i, 1); else if (S.sel.length < 2) S.sel.push(id); refresh(); },
@@ -658,8 +665,8 @@ document.addEventListener('input', function(e){
   if (el.dataset.input === 'empq') { S.empQ = el.value; var ps = el.selectionStart; refresh(); var ne = document.getElementById('empq'); ne.focus(); ne.setSelectionRange(ps, ps); }
   if (el.dataset.input === 'note') S.notes[el.dataset.id] = el.value;
   if (el.dataset.input === 'imp') { S.imp = parseImport(el.value, false); document.getElementById('imppv').innerHTML = importPreview(); }
-  if (el.dataset.input === 'cand') { var v = el.value.trim().toLowerCase().replace(/@.*$/, ''); var m = S.home.members.filter(function(x){ return x.domain === v; })[0]; var box = document.getElementById('cmatch');
-    box.innerHTML = !v ? '<span class="muted">Họ tên và title sẽ tự hiện theo danh sách nhân viên của HR.</span>' : m ? chip('ok', '✓ ' + m.name + ' · ' + m.title) : '<span style="color:var(--waitInk)">Không thấy domain này trong team ' + esc(S.home.team.unit) + '.</span>'; }
+  if (el.dataset.input === 'cand') { var v = el.value.trim().toLowerCase().replace(/@.*$/, ''); var tu = curTeam(S.home).unit; var m = S.home.members.filter(function(x){ return x.domain === v && (!x.units || x.units.indexOf(tu) >= 0); })[0]; var box = document.getElementById('cmatch');
+    box.innerHTML = !v ? '<span class="muted">Họ tên và title sẽ tự hiện theo danh sách nhân viên của HR.</span>' : m ? chip('ok', '✓ ' + m.name + ' · ' + m.title) : '<span style="color:var(--waitInk)">Không thấy domain này trong team ' + esc(tu) + '.</span>'; }
   if (el.dataset.count) { var c = document.getElementById(el.id + '-c'); if (c) c.textContent = el.value.length.toLocaleString('vi-VN') + ' / ' + Number(el.dataset.count).toLocaleString('vi-VN') + ' ký tự'; }
 });
 document.addEventListener('change', function(e){
@@ -686,6 +693,7 @@ document.addEventListener('submit', function(e){
     var need = [['candidateDomain','Domain người được đề cử'],['sow','SOW']].concat(CRIT.map(function(k){ return [RK[k[1]], 'Mức đánh giá ' + k[2]]; })).concat(CRIT.map(function(k){ return [k[1], 'Minh chứng ' + k[2]]; }));
     var miss = need.filter(function(x){ return !fd[x[0]]; });
     if (miss.length) { showErr('ferr', 'Vui lòng nhập: ' + miss.map(function(x){ return x[1]; }).join(', ') + '.'); var fe = document.getElementById(miss[0][0]) || form.querySelector('[name=' + miss[0][0] + ']'); if (fe) fe.focus(); return; }
+    fd.unit = curTeam(S.home).unit;
     busy(btn, true); showErr('ferr', '');
     api('submitNomination', { data: fd }, true).then(function(d){ S.home = d; S.pub = null; toast('Đã gửi đề cử. Đề cử đang hiển thị trên trang ứng viên.'); go('#/de-cu'); }).catch(function(err){ busy(btn, false); showErr('ferr', err.message); });
   }
