@@ -140,8 +140,9 @@ var PHASE = { test:'Test: đề cử & chấm luôn mở', upcoming:'Sắp mở 
 var STATUS = { pending:['ok','Đang hiển thị'], approved:['ok','Đang hiển thị'], hidden:['wait','HR đã ẩn'], withdrawn:['off','Đã rút'] };
 var ROLE = { admin:'Admin', leader:'Team Leader', subleader:'Sub-team Leader' };
 
-function load(){ try { return JSON.parse(sessionStorage.getItem('eoq_sess2')); } catch(e){ return null; } }
-function save(s){ S.sess = s; try { s ? sessionStorage.setItem('eoq_sess2', JSON.stringify(s)) : sessionStorage.removeItem('eoq_sess2'); } catch(e){} }
+var SESS_DAYS = 30;
+function load(){ try { var o = JSON.parse(localStorage.getItem('eoq_sess2') || sessionStorage.getItem('eoq_sess2')); if (o && o.at && Date.now() - o.at > SESS_DAYS * 864e5) { localStorage.removeItem('eoq_sess2'); return null; } return o; } catch(e){ return null; } }
+function save(s){ S.sess = s; try { if (s) { s.at = s.at || Date.now(); localStorage.setItem('eoq_sess2', JSON.stringify(s)); } else { localStorage.removeItem('eoq_sess2'); sessionStorage.removeItem('eoq_sess2'); } } catch(e){} }
 function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function initials(n){ var p = String(n||'').trim().split(/\s+/); return esc(((p.length > 1 ? p[p.length-2][0] : '') + (p[p.length-1]||'?')[0]).toUpperCase()); }
 function chip(cls, t){ return '<span class="chip ' + (cls||'') + '">' + esc(t) + '</span>'; }
@@ -279,7 +280,7 @@ function viewLogin(){
     '<h2 class="sec">Đăng nhập</h2><p class="muted" style="margin:0">Chỉ áp dụng cho Team Leader (hoặc Sub-team Leader). Dùng domain VNG của bạn và mã đăng nhập HR gửi.</p>' +
     '<div><label class="lbl" for="dm">Domain của bạn</label><input class="in" id="dm" name="domain" autocomplete="username" placeholder="VD: binhnv" required></div>' +
     '<div><label class="lbl" for="cd">Mã đăng nhập</label><input class="in code" id="cd" name="code" autocomplete="off" required></div>' +
-    '<div id="lerr" aria-live="assertive"></div><button class="btn" type="submit">Đăng nhập</button><p class="muted small" style="margin:0">Chưa nhận được mã? Liên hệ HRBP.</p></form></div>';
+    '<div id="lerr" aria-live="assertive"></div><button class="btn" type="submit">Đăng nhập</button><p class="muted small" style="margin:0">Chưa có hoặc quên mã? Nhập domain rồi bấm <button type="button" class="link small" data-act="reqCode" style="padding:0">Gửi mã về email</button>. Vẫn chưa nhận được, liên hệ HRBP.</p></form></div>';
 }
 
 /* ---------- Trang chủ (leader) ---------- */
@@ -558,9 +559,9 @@ function viewLeaders(){
     '<div style="flex:1 1 220px;display:flex;flex-direction:column;gap:12px"><div><label class="lbl" for="impfile">Chọn file Excel / CSV</label><input type="file" id="impfile" accept=".xlsx,.xls,.csv,.tsv,.txt" data-change="impfile" class="small"><div class="muted small" style="margin-top:4px">Đọc sheet đầu tiên; dòng đầu là tiêu đề.</div></div>' +
     '<fieldset style="border:0;padding:0;margin:0"><legend class="lbl">Cách import</legend><label class="check small"><input type="radio" name="impmode" value="replace" checked> Thay toàn bộ danh sách</label><label class="check small" style="margin-top:6px"><input type="radio" name="impmode" value="merge"> Thêm mới / cập nhật theo domain</label></fieldset></div></div>' +
     '<div id="imppv" style="display:flex;flex-direction:column;gap:12px">' + importPreview() + '</div><div><button class="btn" data-act="doImport">Import</button> <span class="muted small">Mã đăng nhập đã có của cùng domain được giữ nguyên.</span></div></section>' +
-    '<div class="between"><h2 class="sec">Mã đăng nhập (TL · Sub-TL · Admin)</h2><button class="btn btn2" data-act="exportUsers">Export danh sách (CSV)</button></div>' +
+    '<div class="between"><h2 class="sec">Mã đăng nhập (TL · Sub-TL · Admin)</h2><div class="row" style="gap:8px;flex:0 0 auto"><button class="btn" data-act="mailAll">Gửi mã qua email cho tất cả leader</button><button class="btn btn2" data-act="exportUsers">Export danh sách (CSV)</button></div></div>' +
     '<div class="tbl"><table><thead><tr><th>Họ tên</th><th>Domain</th><th>Vai trò</th><th>Team / sub-team</th><th>Mã đăng nhập</th><th>Đã chấm</th></tr></thead><tbody>' +
-    (d.users.length ? d.users.map(function(u){ return '<tr><td><b>' + esc(u.name) + '</b><div class="muted small">' + esc(u.title) + '</div></td><td>' + esc(u.domain) + '</td><td>' + (u.role === 'admin' ? chip('gold','Admin') : chip('', ROLE[u.role])) + (u.active ? '' : ' ' + chip('off','Đã khoá')) + '</td><td>' + esc(u.unit) + '</td><td>' + (u.accessCode ? '<span class="code">' + esc(u.accessCode) + '</span> <button class="link small" data-act="copy" data-v="' + esc(u.accessCode) + '">Copy</button>' : chip('wait','Đang tạo')) + '</td><td>' + (u.role === 'admin' ? '—' : u.voted ? chip('ok','Đã chấm') : chip('off','Chưa')) + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="muted">Chưa có leader nào. Import danh sách ở trên.</td></tr>') + '</tbody></table></div>' + employeeTable() + '</div>';
+    (d.users.length ? d.users.map(function(u){ return '<tr><td><b>' + esc(u.name) + '</b><div class="muted small">' + esc(u.title) + '</div></td><td>' + esc(u.domain) + '</td><td>' + (u.role === 'admin' ? chip('gold','Admin') : chip('', ROLE[u.role])) + (u.active ? '' : ' ' + chip('off','Đã khoá')) + '</td><td>' + esc(u.unit) + '</td><td>' + (u.accessCode ? '<span class="code">' + esc(u.accessCode) + '</span> <button class="link small" data-act="copy" data-v="' + esc(u.accessCode) + '">Copy</button> <button class="link small" data-act="mailOne" data-v="' + esc(u.domain) + '">Gửi email</button>' : chip('wait','Đang tạo')) + '</td><td>' + (u.role === 'admin' ? '—' : u.voted ? chip('ok','Đã chấm') : chip('off','Chưa')) + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="muted">Chưa có leader nào. Import danh sách ở trên.</td></tr>') + '</tbody></table></div>' + employeeTable() + '</div>';
 }
 function employeeTable(){
   var d = S.admin, q = (S.empQ || '').toLowerCase(), t = S.empTeam || 'all';
@@ -622,6 +623,9 @@ var ACT = {
   demoReset: function(){ ensureDemo().then(function(){ MockAPI.reset(false); save(null); S.sel = []; S.scores = {}; S.notes = {}; toast('Đã reset: chưa có đề cử nào.'); go('#/'); }); },
   demoSample: function(){ ensureDemo().then(function(){ MockAPI.reset(true); save(null); S.sel = []; S.scores = {}; S.notes = {}; toast('Đã nạp 6 đề cử và vài phiếu chấm mẫu.'); go('#/'); }); },
   team: function(el){ S.team = el.dataset.v; refresh(); },
+  reqCode: function(el){ var f = el.closest('form'), dm = f ? f.querySelector('[name=domain]').value.trim() : ''; if (!dm) { showErr('lerr', 'Nhập domain của bạn trước.'); return; } showErr('lerr', ''); api('requestCode', { domain: dm }).then(function(d){ toast(d.message); }).catch(function(err){ showErr('lerr', err.message); }); },
+  mailAll: function(){ if (!confirm('Gửi mã đăng nhập qua email cho tất cả Team Leader / Sub-team Leader?')) return; api('adminSendCodes', { domains: [] }, true).then(function(d){ toast('Đã gửi ' + d.sent + ' email' + (d.failed.length ? '. Lỗi: ' + d.failed.join(', ') : '.')); }).catch(function(err){ toast(err.message); }); },
+  mailOne: function(el){ api('adminSendCodes', { domains: [el.dataset.v] }, true).then(function(d){ toast(d.sent ? 'Đã gửi email cho ' + el.dataset.v + '.' : 'Không gửi được email.'); }).catch(function(err){ toast(err.message); }); },
   nomTeam: function(el){ S.nomUnit = el.dataset.v; refresh(); },
   toggleAll: function(){ var d = S.pub, q = S.q.toLowerCase(); var list = d.candidates.filter(function(x){ return (S.team === 'all' || x.unit === S.team) && (!q || (x.candidateName + ' ' + x.unit + ' ' + x.title).toLowerCase().indexOf(q) >= 0); }); S.open = S.open || {}; var all = list.every(function(x){ return S.open[x.id]; }); list.forEach(function(x){ S.open[x.id] = !all; }); var y = window.scrollY; refresh(); window.scrollTo(0, y); },
   toggleOpen: function(el){ S.open = S.open || {}; S.open[el.dataset.id] = !S.open[el.dataset.id]; var y = window.scrollY; refresh(); window.scrollTo(0, y); },
