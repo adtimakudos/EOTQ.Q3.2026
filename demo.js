@@ -47,7 +47,7 @@ var MailApp = { sendEmail: function (o) { __MAILS.push(o); } };
  * Chạy setup() một lần để tạo các tab. Deploy: Web app · Execute as Me · Anyone.
  */
 
-/** Bản TEST: đặt true để đề cử và chấm điểm luôn mở (bỏ qua mốc thời gian trong Settings). Bản thật để false. */
+/** Bản TEST: đặt true để đề cử và bình chọn luôn mở (bỏ qua mốc thời gian trong Settings). Bản thật để false. */
 var TEST_MODE = false;
 
 var SHEETS = {
@@ -63,8 +63,8 @@ var DEFAULT_SETTINGS = [
   ['cycleName', 'Q3/2026', 'Tên đợt hiển thị trên web'],
   ['nominationStart', '2026-11-10 09:00', 'Giờ Việt Nam, định dạng YYYY-MM-DD HH:mm'],
   ['nominationEnd', '2026-11-12 23:59', 'Đóng đề cử hết ngày 12/11'],
-  ['votingStart', '2026-11-13 00:00', 'Mở chấm điểm'],
-  ['votingEnd', '2026-11-17 23:59', 'Đóng chấm điểm hết ngày 17/11'],
+  ['votingStart', '2026-11-13 00:00', 'Mở bình chọn'],
+  ['votingEnd', '2026-11-17 23:59', 'Đóng bình chọn hết ngày 17/11'],
   ['finalizeDate', '18/11', 'Chỉ để hiển thị'],
   ['ceremonyDate', '19/11', 'Chỉ để hiển thị'],
   ['prize', '2.000.000 VNĐ', ''],
@@ -81,8 +81,8 @@ var CRITERIA = [
 ];
 
 /** Người bị chặn chấm cả nhóm team (khớp theo đầu tên team). Cú pháp: domain=Tiền tố1,Tiền tố2 ; domain2=...
- *  Mặc định: không chặn ai. Muốn chặn, thêm dòng voteBlock vào tab Settings, ví dụ: vinhnq5=Sales */
-var VOTE_BLOCK_DEFAULT = '';
+ *  Mặc định: vinhnq5 không bình chọn cho bất kỳ team nào bắt đầu bằng "Sales". Đổi bằng cách thêm dòng voteBlock vào tab Settings (ghi "none" để tắt). */
+var VOTE_BLOCK_DEFAULT = 'vinhnq5=Sales';
 function voteBlock_(domain) {
   var raw = settings_().voteBlock;
   raw = (raw === undefined || str_(raw) === '') ? VOTE_BLOCK_DEFAULT : str_(raw);
@@ -637,7 +637,7 @@ function ballot_(me) {
 
 function submitVote_(me, entries) {
   requireLeader_(me);
-  if (['voting', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Hiện không trong thời gian chấm điểm.');
+  if (['voting', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Hiện không trong thời gian bình chọn.');
   var mine = liveVotes_().filter(function (v) { return dom_(v.voterDomain) === me.domain; });
   if (!Array.isArray(entries) || entries.length < 1) throw new Error('Chọn ứng viên để chấm.');
   if (mine.length + entries.length > 2) throw new Error(mine.length >= 2 ? 'Bạn đã dùng hết 2 lượt chấm.' : 'Bạn chỉ còn ' + (2 - mine.length) + ' lượt chấm.');
@@ -663,7 +663,7 @@ function submitVote_(me, entries) {
       id: uid_(), createdAt: iso_(), voterDomain: me.domain, voterName: me.name, voterUnit: me.unit,
       nominationId: id, candidateDomain: c.candidateDomain, candidateName: c.candidateName, candidateUnit: c.unit,
       c1: sc.c1, c2: sc.c2, c3: sc.c3, c4: sc.c4, total: round1_(scoreOf_(sc)),
-      comment: clean_(e.comment, LIMITS.comment, 'lý do chấm điểm cho ' + c.candidateName, true)
+      comment: clean_(e.comment, LIMITS.comment, 'lý do bình chọn cho ' + c.candidateName, true)
     };
   });
   recs.forEach(function (r) { append_('Votes', r); });
