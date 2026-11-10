@@ -321,7 +321,7 @@ function teamPick(d){ if (!d.teams || d.teams.length < 2) return ''; var cu = cu
 function myUnit(u, c){ var mu = (u.units && u.units.length) ? u.units : [u.unit], bl = u.block || []; return [c.unit].concat(c.cunits || []).some(function(x){ return mu.indexOf(x) >= 0 || bl.some(function(p){ return String(x).toLowerCase().indexOf(p) === 0; }); }); }
 function viewLeader(){
   var d = S.home, c = d.cycle, t = curTeam(d), canN = canNom(c) && t.used < t.quotaMax;
-  var msg = { test:'Môi trường TEST: đề cử và chấm điểm luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', review:'Đã đóng đề cử. Chấm điểm mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Chấm điểm đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đợt đã kết thúc.' }[c.phase];
+  var msg = { test:'Môi trường TEST: đề cử và chấm điểm luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', review:'Đã đóng đề cử. Chấm điểm mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Chấm điểm đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đã kết thúc đề cử và chấm điểm. Chỉ xem danh sách đề cử ở mục Ứng viên.' }[c.phase];
   var pct = Math.min(100, Math.round(t.used / t.quotaMax * 100));
   return '<div class="stack">' + phaseBanner(c, msg) + teamPick(d) +
     '<div class="row"><div class="card stat"><small>Team của bạn</small><b>' + esc(t.unit) + '</b><span class="muted small">' + esc(ROLE[d.me.leaderType] || 'Leader') + '</span></div>' +
