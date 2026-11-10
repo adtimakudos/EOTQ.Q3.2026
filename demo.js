@@ -37,11 +37,18 @@ var SpreadsheetApp = { getActiveSpreadsheet: function () { return __SS; }, getUi
 var LockService = { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } };
 var ContentService = { MimeType: { JSON: 'json' }, createTextOutput: function (s) { return { content: s, setMimeType: function () { return this; } }; } };
 var Utilities = { getUuid: function () { return 'xxxxxxxxxxxxxxxxxxxxxxxx'.replace(/x/g, function () { return (Math.random() * 16 | 0).toString(16); }); } };
+var CacheService = { getScriptCache: function () { return { get: function () { return null; }, put: function () {}, remove: function () {} }; } };
+
+var __MAILS = [];
+var MailApp = { sendEmail: function (o) { __MAILS.push(o); } };
 /**
  * Adtima – Employee of the Quarter · Backend (Google Apps Script) · v2
  * Dữ liệu nằm trong Google Sheet gắn với script này.
  * Chạy setup() một lần để tạo các tab. Deploy: Web app · Execute as Me · Anyone.
  */
+
+/** Bản TEST: đặt true để đề cử và chấm điểm luôn mở (bỏ qua mốc thời gian trong Settings). Bản thật để false. */
+var TEST_MODE = false;
 
 var SHEETS = {
   Settings: ['key', 'value', 'note'],
@@ -53,11 +60,11 @@ var SHEETS = {
 };
 
 var DEFAULT_SETTINGS = [
-  ['cycleName', 'Q4/2026', 'Tên đợt hiển thị trên web'],
+  ['cycleName', 'Q3/2026', 'Tên đợt hiển thị trên web'],
   ['nominationStart', '2026-11-10 09:00', 'Giờ Việt Nam, định dạng YYYY-MM-DD HH:mm'],
-  ['nominationEnd', '2026-11-12 12:00', ''],
-  ['votingStart', '2026-11-12 12:00', 'Mở chấm điểm (có thể trùng giờ đóng đề cử)'],
-  ['votingEnd', '2026-11-17 18:00', ''],
+  ['nominationEnd', '2026-11-12 23:59', 'Đóng đề cử hết ngày 12/11'],
+  ['votingStart', '2026-11-13 00:00', 'Mở chấm điểm'],
+  ['votingEnd', '2026-11-17 23:59', 'Đóng chấm điểm hết ngày 17/11'],
   ['finalizeDate', '18/11', 'Chỉ để hiển thị'],
   ['ceremonyDate', '19/11', 'Chỉ để hiển thị'],
   ['prize', '2.000.000 VNĐ', ''],
@@ -73,7 +80,22 @@ var CRITERIA = [
   { key: 'c4', ev: 'ev4', r: 'r4', name: 'Improvement & Innovation', weight: 15 }
 ];
 
-var LIMITS = { sow: 600, ev: 1000, comment: 1000, note: 500 };
+/** Người bị chặn chấm cả nhóm team (khớp theo đầu tên team). Cú pháp: domain=Tiền tố1,Tiền tố2 ; domain2=...
+ *  Mặc định: không chặn ai. Muốn chặn, thêm dòng voteBlock vào tab Settings, ví dụ: vinhnq5=Sales */
+var VOTE_BLOCK_DEFAULT = '';
+function voteBlock_(domain) {
+  var raw = settings_().voteBlock;
+  raw = (raw === undefined || str_(raw) === '') ? VOTE_BLOCK_DEFAULT : str_(raw);
+  var out = [];
+  raw.split(';').forEach(function (part) {
+    var kv = part.split('=');
+    if (kv.length < 2 || dom_(kv[0]) !== dom_(domain)) return;
+    kv[1].split(',').forEach(function (x) { x = x.trim().toLowerCase(); if (x && x !== 'none') out.push(x); });
+  });
+  return out;
+}
+
+var LIMITS = { sow: 1000, ev: 1000, comment: 1000, note: 500 };
 
 /* ---------------- Setup, menu, auto mã ---------------- */
 
@@ -101,7 +123,9 @@ function onOpen() {
 /** Tự tạo mã khi HR dán/sửa danh sách ở tab Employees. */
 function onEdit(e) {
   try {
-    if (e && e.range && e.range.getSheet().getName() === 'Employees') generateCodes_();
+    var nm = e && e.range && e.range.getSheet().getName();
+    if (nm) cacheDrop_(nm);
+    if (nm === 'Employees') generateCodes_();
   } catch (err) { /* bỏ qua: vẫn có menu EOQ để tạo mã thủ công */ }
 }
 
@@ -133,24 +157,94 @@ function json_(obj) {
 
 function route_(req) {
   var a = req.action;
+  EMP_CACHE_ = null;
+  if (a === 'requestCode') return requestCode_(req.domain);
   var me = auth_(req);
   INCLUDE_SELF_ = !!req.includeSelf;
   switch (a) {
-    case 'login': return home_(me);
+    case 'login': return me.role === 'leader' ? leaderAll_(me) : home_(me);
+    case 'leaderAll': return leaderAll_(me);
     case 'leaderHome': return home_(me);
     case 'candidates': return publicData_();
     case 'submitNomination': return withLock_(function () { return submitNomination_(me, req.data || {}); });
     case 'withdrawNomination': return withLock_(function () { return withdrawNomination_(me, req.id); });
     case 'ballot': return ballot_(me);
     case 'submitVote': return withLock_(function () { return submitVote_(me, req.entries || []); });
-    case 'adminData': requireAdmin_(me); return withLock_(function () { generateCodes_(); return adminData_(); });
+    case 'adminData': requireAdmin_(me); return adminData_();
     case 'adminReview': requireAdmin_(me); return withLock_(function () { return adminReview_(req.id, req.status, req.note); });
     case 'adminImport': requireAdmin_(me); return withLock_(function () { return adminImport_(req.rows || [], req.mode); });
     case 'adminUpdateEmployee': requireAdmin_(me); return withLock_(function () { return adminUpdateEmployee_(me, req.domainKey, req.data || {}); });
     case 'adminDelete': requireAdmin_(me); return withLock_(function () { return adminDelete_(req.id); });
+    case 'adminSendCodes': requireAdmin_(me); return sendCodes_(req.domains);
     case 'adminEdit': requireAdmin_(me); return withLock_(function () { return adminEdit_(req.id, req.data || {}); });
   }
   throw new Error('Thao tác không hợp lệ.');
+}
+
+/* ---------------- Gửi mã qua email ---------------- */
+
+/** Email = domain@emailDomain. Đổi đuôi email bằng dòng emailDomain trong tab Settings. Thêm dòng webUrl để chèn link web vào email. */
+var MAIL_DOMAIN_DEFAULT = 'vng.com.vn';
+
+function mailOf_(u) {
+  var s = settings_();
+  return u.domain + '@' + (str_(s.emailDomain) || MAIL_DOMAIN_DEFAULT);
+}
+
+function sendCodeMail_(u) {
+  var s = settings_();
+  var url = str_(s.webUrl);
+  var cycle = str_(s.cycleName) || 'Employee of the Quarter';
+  var html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#14213D;line-height:1.6">' +
+    '<p>Chào ' + esc_(u.name) + ',</p>' +
+    '<p>Đây là thông tin đăng nhập nền tảng đề cử &amp; bình chọn <b>Employee of the Quarter ' + esc_(cycle) + '</b> của Adtima:</p>' +
+    '<p style="background:#F2F7FF;border-radius:8px;padding:12px 16px">Domain: <b>' + esc_(u.domain) + '</b><br>Mã đăng nhập: <b style="font-size:18px;letter-spacing:2px">' + esc_(u.accessCode) + '</b></p>' +
+    (url ? '<p>Truy cập: <a href="' + esc_(url) + '">' + esc_(url) + '</a></p>' : '') +
+    '<p>Mã này dành riêng cho bạn, vui lòng không chia sẻ. Cần hỗ trợ, liên hệ HRBP.</p></div>';
+  MailApp.sendEmail({ to: mailOf_(u), subject: '[Adtima] Mã đăng nhập Employee of the Quarter ' + cycle, htmlBody: html, name: 'Adtima HR' });
+}
+
+function esc_(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+/** Leader tự nhận lại mã: không cần đăng nhập. Luôn trả cùng một thông báo để không lộ domain nào tồn tại; tối đa 1 email / 5 phút / domain. */
+function requestCode_(domain) {
+  var d = dom_(domain);
+  if (!d) throw new Error('Vui lòng nhập domain.');
+  var msg = { message: 'Nếu domain hợp lệ, mã đăng nhập đã được gửi về email ' + d + '@' + (str_(settings_().emailDomain) || MAIL_DOMAIN_DEFAULT) + '. Hãy kiểm tra cả mục Spam.' };
+  var u = employees_()[d];
+  if (!u || !canLogin_(u.role) || !u.active || !u.accessCode) return msg;
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); if (cache.get('rc_' + d)) return msg; cache.put('rc_' + d, '1', 300); } catch (e) {}
+  try { sendCodeMail_(u); } catch (e) { throw new Error('Chưa gửi được email. Liên hệ HRBP.'); }
+  return msg;
+}
+
+/** Admin gửi mã: domains rỗng = tất cả Team Leader / Sub-team Leader đang hoạt động. */
+function sendCodes_(domains) {
+  var emp = employees_();
+  var want = Array.isArray(domains) && domains.length ? domains.map(dom_) : null;
+  var sent = 0, failed = [];
+  Object.keys(emp).forEach(function (k) {
+    var u = emp[k];
+    if (!u.active || !u.accessCode || !canLogin_(u.role)) return;
+    if (want ? want.indexOf(u.domain) < 0 : u.role === 'admin') return;
+    try { sendCodeMail_(u); sent++; } catch (e) { failed.push(u.domain); }
+  });
+  return { sent: sent, failed: failed };
+}
+
+/** Chạy hàm này 1 lần trong trình soạn thảo Apps Script (chọn authorizeMail → Run) để cấp quyền gửi email và gửi thử 1 mail cho chính bạn. */
+function authorizeMail() {
+  var me = Session.getEffectiveUser().getEmail();
+  MailApp.sendEmail({ to: me, subject: '[Adtima EOQ] Thử gửi email', htmlBody: 'Quyền gửi email đã hoạt động. Hạn mức còn lại hôm nay: ' + MailApp.getRemainingDailyQuota() + ' email.', name: 'Adtima HR' });
+  Logger.log('Đã gửi email thử tới ' + me);
+}
+
+/** Phiếu còn hiệu lực: bỏ phiếu của đề cử đã bị Admin xoá (phiếu vẫn nằm trong Sheet để lưu vết). */
+function liveVotes_(noms) {
+  var gone = {};
+  (noms || rows_('Nominations')).forEach(function (n) { if (n.status === 'deleted') gone[str_(n.id)] = 1; });
+  return rows_('Votes').filter(function (v) { return !gone[str_(v.nominationId)]; });
 }
 
 function withLock_(fn) {
@@ -167,8 +261,24 @@ function sheet_(name) {
   return sh;
 }
 
+var CACHED_SHEETS_ = { Employees: 1, Settings: 1 };
+function cacheGet_(name) {
+  try { var v = CacheService.getScriptCache().get('rows_' + name); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+}
+function cachePut_(name, values) {
+  try { var j = JSON.stringify(values); if (j.length < 95000) CacheService.getScriptCache().put('rows_' + name, j, 60); } catch (e) {}
+}
+function cacheDrop_(name) {
+  try { CacheService.getScriptCache().remove('rows_' + name); } catch (e) {}
+}
+
 function rows_(name) {
-  var values = sheet_(name).getDataRange().getValues();
+  var values = CACHED_SHEETS_[name] ? cacheGet_(name) : null;
+  if (!values) {
+    values = sheet_(name).getDataRange().getValues().map(function (r) { return r.map(function (c) { return c instanceof Date ? c.toISOString() : c; }); });
+    if (CACHED_SHEETS_[name]) cachePut_(name, values);
+  }
+  values = values.slice();
   var head = (values.shift() || []).map(function (h) { return String(h).trim(); });
   return values.map(function (r, i) {
     var o = { _row: i + 2 };
@@ -182,10 +292,13 @@ function safe_(v) {
 }
 
 function append_(name, obj) {
+  cacheDrop_(name);
   sheet_(name).appendRow(SHEETS[name].map(function (h) { return obj[h] === undefined ? '' : safe_(obj[h]); }));
 }
 
 function update_(name, row, obj) {
+  cacheDrop_(name);
+  if (name === 'Employees') EMP_CACHE_ = null;
   var sh = sheet_(name);
   var head = sh.getRange(1, 1, 1, sh.getLastColumn ? sh.getLastColumn() : SHEETS[name].length).getValues()[0].map(function (h) { return String(h).trim(); });
   var cur = sh.getRange(row, 1, 1, head.length).getValues()[0];
@@ -206,6 +319,7 @@ function parseDate_(v) {
   if (v instanceof Date) return v;
   var s = str_(v);
   if (!s) return null;
+  if (/T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.test(s)) { var dz = new Date(s); return isNaN(dz) ? null : dz; }
   var m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
   if (!m) return null;
   return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], (+(m[4] || 0)) - 7, +(m[5] || 0)));
@@ -224,13 +338,14 @@ function now_() {
 }
 
 function phase_(s) {
+  if (TEST_MODE) return 'test';
   var n = now_().getTime();
   var ns = parseDate_(s.nominationStart), ne = parseDate_(s.nominationEnd);
   var vs = parseDate_(s.votingStart), ve = parseDate_(s.votingEnd);
   if (ns && n < ns.getTime()) return 'upcoming';
-  if (ne && n <= ne.getTime()) return 'nomination';
+  if (ne && n <= ne.getTime() + 59999) return 'nomination';
   if (vs && n < vs.getTime()) return 'review';
-  if (ve && n <= ve.getTime()) return 'voting';
+  if (ve && n <= ve.getTime() + 59999) return 'voting';
   return 'closed';
 }
 
@@ -240,7 +355,7 @@ function cycle_(s) {
     nominationStart: fmtDate_(parseDate_(s.nominationStart)), nominationEnd: fmtDate_(parseDate_(s.nominationEnd)),
     votingStart: fmtDate_(parseDate_(s.votingStart)), votingEnd: fmtDate_(parseDate_(s.votingEnd)),
     finalizeDate: str_(s.finalizeDate), ceremonyDate: str_(s.ceremonyDate),
-    phase: phase_(s)
+    phase: phase_(s), testMode: TEST_MODE
   };
 }
 
@@ -260,13 +375,33 @@ function roleOf_(v) {
 
 function canLogin_(role) { return role === 'leader' || role === 'subleader' || role === 'admin'; }
 
+var EMP_CACHE_ = null;
+/** Cột unit: nhiều team cách nhau bằng dấu ;  Tên team có dấu * ở cuối = chỉ là nhân viên của team đó (không phụ trách).
+ *  VD "Sales VuLB; Sales Management & Agency*": phụ trách Sales VuLB, là nhân viên của Sales Management & Agency. */
+function parseUnits_(v) {
+  var out = [], seen = {};
+  String(v == null ? '' : v).split(/[;；]/).forEach(function (x) {
+    x = x.trim(); var member = /\*$/.test(x); x = x.replace(/\*+$/, '').trim();
+    if (!x) return;
+    if (seen[x] !== undefined) { if (!member) out[seen[x]].member = false; return; }
+    seen[x] = out.length; out.push({ n: x, member: member });
+  });
+  return out;
+}
+function units_(v) { return parseUnits_(v).map(function (x) { return x.n; }); }
+function leadUnits_(v) { return parseUnits_(v).filter(function (x) { return !x.member; }).map(function (x) { return x.n; }); }
+function unitStr_(v) { return parseUnits_(v).map(function (x) { return x.n + (x.member ? '*' : ''); }).join('; '); }
+function overlap_(a, b) { return (a || []).some(function (x) { return (b || []).indexOf(x) >= 0; }); }
+
 function employees_() {
+  if (EMP_CACHE_) return EMP_CACHE_;
   var map = {};
   rows_('Employees').forEach(function (e) {
     var d = dom_(e.domain);
-    if (d) map[d] = { domain: d, name: str_(e.name), title: str_(e.title), unit: str_(e.unit), role: roleOf_(e.role),
+    if (d) map[d] = { domain: d, name: str_(e.name), title: str_(e.title), unit: unitStr_(e.unit), units: units_(e.unit), leads: leadUnits_(e.unit), role: roleOf_(e.role),
       accessCode: str_(e.accessCode), active: String(e.active).toUpperCase() !== 'FALSE', _row: e._row };
   });
+  EMP_CACHE_ = map;
   return map;
 }
 
@@ -278,11 +413,11 @@ function auth_(req) {
   if (!u || !canLogin_(u.role) || !u.active || u.accessCode.toUpperCase() !== code) {
     throw new Error('Domain hoặc mã đăng nhập không đúng.');
   }
-  return { domain: u.domain, name: u.name, role: u.role === 'admin' ? 'admin' : 'leader', leaderType: u.role, unit: u.unit, title: u.title };
+  return { domain: u.domain, name: u.name, role: u.role === 'admin' ? 'admin' : 'leader', leaderType: u.role, unit: u.leads.join('; ') || u.units.join('; '), units: u.units, leads: u.leads, block: voteBlock_(u.domain), title: u.title };
 }
 
 function requireAdmin_(me) { if (me.role !== 'admin') throw new Error('Chỉ Admin được dùng chức năng này.'); }
-function requireLeader_(me) { if (me.role !== 'leader') throw new Error('Chức năng dành cho Team Leader / Sales Sub-team Leader.'); }
+function requireLeader_(me) { if (me.role !== 'leader') throw new Error('Chức năng dành cho Team Leader / Sub-team Leader.'); }
 
 function generateCodes_() {
   var alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -314,9 +449,11 @@ function teams_(emp) {
   var map = {};
   Object.keys(emp).forEach(function (k) {
     var e = emp[k];
-    if (!e.active || e.role === 'admin' || !e.unit) return;
-    if (!map[e.unit]) map[e.unit] = { unit: e.unit, headcount: 0 };
-    map[e.unit].headcount++;
+    if (!e.active || e.role === 'admin') return;
+    e.units.forEach(function (un) {
+      if (!map[un]) map[un] = { unit: un, headcount: 0 };
+      map[un].headcount++;
+    });
   });
   return map;
 }
@@ -330,7 +467,7 @@ function candidate_(n, emp) {
   var e = emp[dom_(n.candidateDomain)] || {};
   return {
     id: str_(n.id), candidateDomain: dom_(n.candidateDomain), candidateName: e.name || str_(n.candidateName),
-    title: e.title || str_(n.candidateTitle), unit: str_(n.unit), sow: str_(n.sow),
+    title: e.title || str_(n.candidateTitle), unit: str_(n.unit), cunits: e.units || [], sow: str_(n.sow),
     ev1: str_(n.ev1), ev2: str_(n.ev2), ev3: str_(n.ev3), ev4: str_(n.ev4),
     r1: Number(n.r1) || 0, r2: Number(n.r2) || 0, r3: Number(n.r3) || 0, r4: Number(n.r4) || 0
   };
@@ -397,18 +534,24 @@ function home_(me) {
   var res = { me: me, cycle: cycle_(s) };
   if (me.role === 'leader') {
     var emp = employees_();
-    var t = teams_(emp)[me.unit] || { unit: me.unit, headcount: 0 };
-    var mine = rows_('Nominations').filter(function (n) { return str_(n.unit) === me.unit; });
-    res.team = { unit: me.unit, headcount: t.headcount, quotaMax: quotaFor_(t.headcount), used: mine.filter(activeNomination_).length };
+    var tm = teams_(emp), all = rows_('Nominations');
+    var myUnits = me.leads && me.leads.length ? me.leads : [me.unit];
+    res.teams = myUnits.map(function (un) {
+      var t = tm[un] || { unit: un, headcount: 0 };
+      return { unit: un, headcount: t.headcount, quotaMax: quotaFor_(t.headcount),
+        used: all.filter(function (n) { return str_(n.unit) === un && activeNomination_(n); }).length };
+    });
+    res.team = res.teams[0];
+    var mine = all.filter(function (n) { return myUnits.indexOf(str_(n.unit)) >= 0; });
     res.members = Object.keys(emp).map(function (k) { return emp[k]; })
-      .filter(function (e) { return e.unit === me.unit && e.active; })
-      .map(function (e) { return { domain: e.domain, name: e.name, title: e.title }; });
+      .filter(function (e) { return e.active && overlap_(e.units, myUnits); })
+      .map(function (e) { return { domain: e.domain, name: e.name, title: e.title, units: e.units }; });
     res.nominations = mine.map(function (n) {
       var o = candidate_(n, emp);
       o.status = str_(n.status); o.hrNote = str_(n.hrNote); o.createdAt = str_(n.createdAt); o.nominatorName = str_(n.nominatorName);
       return o;
     });
-    res.hasVoted = rows_('Votes').some(function (v) { return dom_(v.voterDomain) === me.domain; });
+    res.hasVoted = liveVotes_().some(function (v) { return dom_(v.voterDomain) === me.domain; });
   }
   return res;
 }
@@ -423,21 +566,24 @@ function clean_(v, max, label, required) {
 function submitNomination_(me, d) {
   requireLeader_(me);
   var s = settings_();
-  if (phase_(s) !== 'nomination') throw new Error('Hiện không trong thời gian đề cử.');
-  var t = teams_()[me.unit];
-  if (!t) throw new Error('Team "' + me.unit + '" chưa có trong danh sách nhân viên. Liên hệ HR.');
+  if (['nomination', 'test'].indexOf(phase_(s)) < 0) throw new Error('Hiện không trong thời gian đề cử.');
+  var myUnits = me.leads && me.leads.length ? me.leads : [me.unit];
+  var un = str_(d.unit) || myUnits[0];
+  if (myUnits.indexOf(un) < 0) throw new Error('Bạn không phụ trách team "' + un + '".');
+  var t = teams_()[un];
+  if (!t) throw new Error('Team "' + un + '" chưa có trong danh sách nhân viên. Liên hệ HR.');
   var noms = rows_('Nominations');
-  var used = noms.filter(function (n) { return str_(n.unit) === me.unit && activeNomination_(n); }).length;
+  var used = noms.filter(function (n) { return str_(n.unit) === un && activeNomination_(n); }).length;
   var max = quotaFor_(t.headcount);
   if (used >= max) throw new Error('Team đã dùng hết quota đề cử (' + max + '). Rút một đề cử đang chờ duyệt để gửi lại.');
   var cd = dom_(d.candidateDomain);
   if (!cd) throw new Error('Vui lòng nhập domain của người bạn muốn đề cử.');
   var c = employees_()[cd];
   if (!c || !c.active) throw new Error('Không tìm thấy domain "' + cd + '" trong danh sách nhân viên. Liên hệ HR nếu danh sách thiếu.');
-  if (c.unit !== me.unit) throw new Error(c.name + ' thuộc team ' + c.unit + '. Bạn chỉ đề cử được thành viên team ' + me.unit + '.');
+  if (c.units.indexOf(un) < 0) throw new Error(c.name + ' thuộc team ' + c.unit + '. Bạn chỉ đề cử được thành viên team ' + un + '.');
   if (noms.some(function (n) { return dom_(n.candidateDomain) === cd && activeNomination_(n); })) throw new Error(c.name + ' đã được đề cử trong đợt này.');
   var rec = {
-    id: uid_(), createdAt: iso_(), nominatorDomain: me.domain, nominatorName: me.name, unit: me.unit,
+    id: uid_(), createdAt: iso_(), nominatorDomain: me.domain, nominatorName: me.name, unit: un,
     candidateDomain: cd, candidateName: c.name, candidateTitle: c.title,
     sow: clean_(d.sow, LIMITS.sow, 'SOW', true), status: 'approved', hrNote: '', updatedAt: iso_()
   };
@@ -453,22 +599,34 @@ function submitNomination_(me, d) {
 
 function withdrawNomination_(me, id) {
   requireLeader_(me);
-  if (phase_(settings_()) !== 'nomination') throw new Error('Đã hết thời gian đề cử.');
+  if (['nomination', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Đã hết thời gian đề cử.');
   var n = rows_('Nominations').filter(function (x) { return str_(x.id) === str_(id); })[0];
-  if (!n || str_(n.unit) !== me.unit) throw new Error('Không tìm thấy đề cử.');
+  if (!n || (me.leads && me.leads.length ? me.leads : [me.unit]).indexOf(str_(n.unit)) < 0) throw new Error('Không tìm thấy đề cử.');
   if (n.status === 'withdrawn') throw new Error('Đề cử đã được rút.');
   update_('Nominations', n._row, { status: 'withdrawn', updatedAt: iso_() });
   return home_(me);
 }
 
+/** Ứng viên thuộc team của người chấm: team đề cử thuộc team của họ, hoặc bản thân ứng viên có team trùng. */
+function ownsCand_(me, c, emp) {
+  var mu = me.units && me.units.length ? me.units : [me.unit];
+  var e = emp[c.candidateDomain];
+  if (mu.indexOf(c.unit) >= 0 || overlap_(mu, e && e.units)) return true;
+  var bl = me.block || [];
+  return [c.unit].concat((e && e.units) || []).some(function (un) {
+    un = String(un).toLowerCase();
+    return bl.some(function (pre) { return un.indexOf(pre) === 0; });
+  });
+}
+
 function ballot_(me) {
   requireLeader_(me);
   var emp = employees_();
-  var mine = rows_('Votes').filter(function (v) { return dom_(v.voterDomain) === me.domain; });
+  var mine = liveVotes_().filter(function (v) { return dom_(v.voterDomain) === me.domain; });
   return {
     cycle: cycle_(settings_()),
     candidates: rows_('Nominations').filter(visible_).map(function (n) {
-      var o = candidate_(n, emp); o.locked = o.unit === me.unit; return o;
+      var o = candidate_(n, emp); o.locked = ownsCand_(me, o, emp); return o;
     }),
     myVotes: mine.map(function (v) {
       return { nominationId: str_(v.nominationId), candidateName: str_(v.candidateName), candidateUnit: str_(v.candidateUnit),
@@ -479,8 +637,8 @@ function ballot_(me) {
 
 function submitVote_(me, entries) {
   requireLeader_(me);
-  if (phase_(settings_()) !== 'voting') throw new Error('Hiện không trong thời gian chấm điểm.');
-  var mine = rows_('Votes').filter(function (v) { return dom_(v.voterDomain) === me.domain; });
+  if (['voting', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Hiện không trong thời gian chấm điểm.');
+  var mine = liveVotes_().filter(function (v) { return dom_(v.voterDomain) === me.domain; });
   if (!Array.isArray(entries) || entries.length < 1) throw new Error('Chọn ứng viên để chấm.');
   if (mine.length + entries.length > 2) throw new Error(mine.length >= 2 ? 'Bạn đã dùng hết 2 lượt chấm.' : 'Bạn chỉ còn ' + (2 - mine.length) + ' lượt chấm.');
   var noms = rows_('Nominations');
@@ -494,7 +652,7 @@ function submitVote_(me, entries) {
     var n = noms.filter(function (x) { return str_(x.id) === id && visible_(x); })[0];
     if (!n) throw new Error('Ứng viên không hợp lệ.');
     var c = candidate_(n, emp);
-    if (c.unit === me.unit) throw new Error('Không được chấm ứng viên thuộc team của bạn.');
+    if (ownsCand_(me, c, emp)) throw new Error('Không được chấm ứng viên thuộc team của bạn.');
     var sc = {};
     CRITERIA.forEach(function (cr) {
       var x = Number(e[cr.key]);
@@ -518,7 +676,7 @@ function adminData_() {
   var s = settings_();
   var emp = employees_();
   var noms = rows_('Nominations');
-  var votes = rows_('Votes');
+  var votes = liveVotes_(noms);
   var tmap = teams_(emp);
   var votedBy = {};
   votes.forEach(function (v) { votedBy[dom_(v.voterDomain)] = 1; });
@@ -526,9 +684,11 @@ function adminData_() {
   var leaders = people.filter(function (u) { return u.role === 'leader' || u.role === 'subleader'; });
   Object.keys(tmap).forEach(function (k) { tmap[k].leaders = 0; tmap[k].voted = 0; });
   leaders.forEach(function (u) {
-    if (!tmap[u.unit]) tmap[u.unit] = { unit: u.unit, headcount: 0, leaders: 0, voted: 0 };
-    tmap[u.unit].leaders++;
-    if (votedBy[u.domain]) tmap[u.unit].voted++;
+    u.leads.forEach(function (un) {
+      if (!tmap[un]) tmap[un] = { unit: un, headcount: 0, leaders: 0, voted: 0 };
+      tmap[un].leaders++;
+      if (votedBy[u.domain]) tmap[un].voted++;
+    });
   });
   var teams = Object.keys(tmap).map(function (k) {
     var t = tmap[k];
@@ -545,7 +705,10 @@ function adminData_() {
     settingsRaw: { rankingMethod: rk.method, includeSelf: rk.includeSelf, minJudges: rk.minJudges },
     teams: teams.sort(function (a, b) { return a.unit.localeCompare(b.unit); }),
     employeeCount: people.length,
-    employees: people.map(function (u) { return { domain: u.domain, name: u.name, title: u.title, unit: u.unit, role: u.role, active: u.active }; }),
+    employees: people.reduce(function (acc, u) {
+      (u.units.length ? u.units : ['']).forEach(function (un) { acc.push({ domain: u.domain, name: u.name, title: u.title, unit: un, unitAll: u.unit, role: u.role, active: u.active }); });
+      return acc;
+    }, []),
     users: people.filter(function (u) { return canLogin_(u.role); }).map(function (u) {
       return { domain: u.domain, name: u.name, role: u.role, unit: u.unit, title: u.title, accessCode: u.accessCode, active: u.active, voted: !!votedBy[u.domain] };
     }),
@@ -601,7 +764,7 @@ function adminImport_(rows, mode) {
   var out = {}, order = [], errors = [];
   if (mode === 'merge') Object.keys(old).forEach(function (k) { out[k] = old[k]; order.push(k); });
   rows.forEach(function (r, i) {
-    var d = dom_(r.domain), name = str_(r.name), unit = str_(r.unit);
+    var d = dom_(r.domain), name = str_(r.name), unit = unitStr_(r.unit);
     if (!d && !name) return;
     if (!/^[a-z0-9._-]{2,64}$/.test(d)) { errors.push('Dòng ' + (i + 1) + ': domain "' + str_(r.domain) + '" không hợp lệ'); return; }
     if (!name || !unit) { errors.push('Dòng ' + (i + 1) + ' (' + d + '): thiếu họ tên hoặc team'); return; }
@@ -618,9 +781,12 @@ function adminImport_(rows, mode) {
     return [e.domain, safe_(e.name), safe_(e.title), safe_(e.unit), roleName[e.role] || 'employee', e.accessCode, e.active ? 'TRUE' : 'FALSE'];
   }));
   var sh = sheet_('Employees');
+  EMP_CACHE_ = null;
+  cacheDrop_('Employees');
   sh.clearContents();
   sh.getRange(1, 1, values.length, SHEETS.Employees.length).setValues(values);
   var created = generateCodes_();
+  EMP_CACHE_ = null;
   var res = adminData_();
   res.importSummary = { total: order.length, created: created };
   return res;
@@ -634,7 +800,7 @@ function adminUpdateEmployee_(me, domainKey, d) {
   var nd = dom_(d.domain !== undefined ? d.domain : cur.domain);
   if (!/^[a-z0-9._-]{2,64}$/.test(nd)) throw new Error('Domain không hợp lệ.');
   if (nd !== cur.domain && emp[nd]) throw new Error('Domain ' + nd + ' đã tồn tại.');
-  var name = str_(d.name !== undefined ? d.name : cur.name), unit = str_(d.unit !== undefined ? d.unit : cur.unit);
+  var name = str_(d.name !== undefined ? d.name : cur.name), unit = unitStr_(d.unit !== undefined ? d.unit : cur.unit);
   if (!name || !unit) throw new Error('Họ tên và team không được trống.');
   var role = d.role !== undefined ? roleOf_(d.role) : cur.role;
   var active = d.active !== undefined ? !!d.active : cur.active;
@@ -653,6 +819,14 @@ function adminDelete_(id) {
   update_('Nominations', n._row, { status: 'deleted', updatedAt: iso_() });
   return adminData_();
 }
+
+/** Toàn bộ dữ liệu leader cần trong 1 lần gọi (đề cử của team + danh sách đề cử + phiếu chấm). */
+function leaderAll_(me) {
+  var res = home_(me);
+  res.pub = publicData_();
+  res.ballot = ballot_(me);
+  return res;
+}
 /* Dữ liệu minh hoạ cho chế độ DEMO + API giả lập. Tên người, domain là giả định. */
 function __seed(withSample) {
   __DB = {};
@@ -661,8 +835,9 @@ function __seed(withSample) {
   [
     ['hr.admin', 'Admin', 'HRBP', 'People & Culture', 'admin', 'Q7MX4KTB', 'TRUE'],
     ['binhnv', 'Nguyễn Văn Bình', 'Team Leader', 'Planner', 'leader', 'R2HV9PDN', 'TRUE'],
-    ['cucntt', 'Trần Thị Cúc', 'Sales Sub-team Leader', 'Sales VuLB', 'sub-leader', 'W8KZ3MFA', 'TRUE'],
+    ['cucntt', 'Trần Thị Cúc', 'Sub-team Leader', 'Sales VuLB', 'sub-leader', 'W8KZ3MFA', 'TRUE'],
     ['dunglh', 'Lê Hoàng Dũng', 'Team Leader', 'Marketing', 'leader', 'T5NB7QYC', 'TRUE'],
+    ['vinhnq5', 'Nguyễn Quang Vinh', 'Team Leader', 'Ad Commercial; Sales VuLB', 'leader', 'V4NQ6HXD', 'TRUE'],
     ['empm', 'Phạm Mai Em', 'Team Leader', 'Audience Insights', 'leader', 'J3XR8WDK', 'TRUE'],
     ['phongdq', 'Đặng Quốc Phong', 'Team Leader', 'Ad Commercial', 'leader', 'M6PC2VHT', 'TRUE'],
     ['annt', 'Nguyễn Thị An', 'Senior Account Manager', 'Sales VuLB', 'employee', '', 'TRUE'],
