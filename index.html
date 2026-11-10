@@ -14,7 +14,7 @@
 body{margin:0;background:var(--bg);font-family:'Be Vietnam Pro',system-ui,sans-serif;color:var(--ink);font-size:14px;line-height:1.55}
 a{color:var(--royal)}a:hover{color:var(--royalD)}
 h1,h2,h3{margin:0}
-.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 28px}
 .demo{background:var(--goldBg);color:var(--goldInk);font-size:13px}
 .demo .wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-height:44px;padding-top:6px;padding-bottom:6px}
 .demo select,.demo button{font:inherit;font-size:13px;min-height:32px;border-radius:8px;border:1px solid #E5CF7A;background:#fff;color:var(--goldInk);padding:0 10px;cursor:pointer}
@@ -34,7 +34,7 @@ h1,h2,h3{margin:0}
 .btn:disabled{background:#B8C4DE;color:#fff;cursor:not-allowed;border-color:transparent}
 .btn.sm{min-height:36px;padding:0 14px;font-size:13px}
 .link{background:none;border:0;color:var(--royal);font:inherit;font-weight:700;cursor:pointer;padding:6px 0}
-main{padding:32px 0 8px}
+main{padding:48px 0 8px}
 .stack{display:flex;flex-direction:column;gap:24px}
 .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:24px}
 .sec{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;letter-spacing:.6px;text-transform:uppercase;color:var(--royal);margin:0}
@@ -235,7 +235,7 @@ function keyDates(c){
   }).join('') + '</div>';
 }
 function critStrip(){ return '<div class="crit">' + CRIT.map(function(c, i){ return '<div><h3>0' + (i+1) + '  ' + c[2].toUpperCase() + '<span>' + c[3] + '%</span></h3><p>' + c[4] + '</p></div>'; }).join('') + '</div>'; }
-function heroBlock(c){ return '<section class="card hero"><div><span class="chip">' + esc(c.cycleName) + '</span><h1>EMPLOYEE OF THE QUARTER</h1><p class="muted" style="margin:0">Recognizing meaningful impact, strong ownership and continuous improvement.</p></div><div class="prize"><b>' + esc(c.prize) + '</b><span>01 WINNER &nbsp;|&nbsp; CASH AWARD</span></div></section>'; }
+function heroBlock(c){ return '<section class="card hero"><div><span class="chip">' + esc(c.cycleName) + '</span><h1>EMPLOYEE OF THE QUARTER</h1><p class="muted" style="margin:0">Recognizing meaningful impact, strong ownership and continuous improvement.</p></div><div class="prize"><b>' + esc(/chứng nhận/i.test(c.prize) ? c.prize : c.prize + ' + Chứng nhận') + '</b><span>01 WINNER &nbsp;|&nbsp; CASH AWARD + CERTIFICATE</span></div></section>'; }
 function candCard(c){
   S.open = S.open || {}; var open = !!S.open[c.id];
   return '<article class="card cand"><div class="ch"><div class="av" aria-hidden="true">' + initials(c.candidateName) + '</div><div><h3>' + esc(c.candidateName) + '</h3><div class="muted small">' + esc(c.title) + '</div><div style="margin-top:6px">' + chip('', c.unit) + '</div></div></div>' +
