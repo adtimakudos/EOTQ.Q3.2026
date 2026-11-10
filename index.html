@@ -23,11 +23,11 @@ h1,h2,h3{margin:0}
 .logo{display:flex;flex-direction:column;line-height:1;text-decoration:none}
 .lw{font-weight:800;font-size:28px;letter-spacing:-.5px;color:var(--royal)}.lw b{color:var(--cyan);font-weight:800}
 .tg{font-size:10px;letter-spacing:1.6px;color:var(--ink);margin-top:4px}
-.nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-.nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:10px;color:#3D4D6E;text-decoration:none;font-weight:600}
+.nav{display:flex;gap:4px;flex-wrap:nowrap;flex:1 1 auto;min-width:0}
+.nav a{white-space:nowrap;flex:none;display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:10px;color:#3D4D6E;text-decoration:none;font-weight:600}
 .nav a.on{background:var(--light);color:var(--royalD)}
 .who{display:flex;align-items:center;gap:12px}
-.who .n{text-align:right;line-height:1.3}.who .n b{display:block}.who .n span{font-size:12px;color:var(--muted)}
+.who .n{text-align:right;line-height:1.3;max-width:280px}.who .n b{display:block}.who .n span{font-size:12px;color:var(--muted)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 20px;border-radius:10px;background:var(--royal);color:#fff;font-weight:700;text-decoration:none;border:0;font-size:14px;font-family:inherit;cursor:pointer;white-space:nowrap}
 .btn:hover{background:var(--royalD);color:#fff}
 .btn2{background:#fff;color:var(--royal);border:1px solid #B9D5F2}.btn2:hover{background:var(--light);color:var(--royalD)}
@@ -114,6 +114,7 @@ tr.hl td{background:var(--goldBg)}tr.sel td{background:var(--light)}tr.warn td{b
 .empty{text-align:center;padding:40px 24px;color:var(--muted)}
 .foot{border-top:3px solid var(--yellow);margin-top:48px;padding:16px 0 32px;font-size:12px;letter-spacing:1px;color:var(--muted);text-align:right}
 .code{font-family:ui-monospace,Menlo,monospace;font-weight:700;letter-spacing:1px}
+@media (max-width:1100px){.nav{flex-wrap:wrap}}
 @media (max-width:900px){.login-wrap{grid-template-columns:1fr!important}.crit[style]{grid-template-columns:1fr!important}.two,.vote{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.crit,.dates{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
@@ -403,7 +404,7 @@ function viewVote(){
       CRIT.map(function(k){ var v = sc[k[0]]; return '<div class="ev" style="display:flex;flex-direction:column;gap:10px"><b><span>' + k[2] + '</span><span>Trọng số ' + k[3] + '%</span></b><div class="pre small">' + esc(x[k[1]]) + '</div>' +
         '<div class="crow"><div class="lvl">' + (v ? '<b style="color:var(--ink)">' + v + ' · ' + SCALE[v-1][0] + '</b><br>' + SCALE[v-1][1] : 'Chọn điểm 1–5 (định nghĩa ở cột bên trái).') + '</div><div class="seg" role="radiogroup" aria-label="' + k[2] + ' – ' + esc(x.candidateName) + '">' + [1,2,3,4,5].map(function(n){ return '<button role="radio" aria-checked="' + (v === n) + '" class="' + (v === n ? 'on' : '') + '" data-act="rate" data-id="' + esc(id) + '" data-k="' + k[0] + '" data-n="' + n + '" title="' + n + ' – ' + SCALE[n-1][0] + ': ' + SCALE[n-1][1] + '">' + n + '</button>'; }).join('') + '</div></div></div>'; }).join('') +
       '<div><label class="lbl" for="cm-' + esc(id) + '">Lý do bình chọn (chung cho cả 4 tiêu chí) *</label><textarea class="in" id="cm-' + esc(id) + '" data-input="note" data-id="' + esc(id) + '" maxlength="1000" rows="3" placeholder="VD: Minh chứng KPI rõ ràng, tác động trực tiếp tới doanh thu…">' + esc(S.notes[id] || '') + '</textarea></div></section>'; }).join('');
-  return '<div class="stack"><div class="banner">' + chip('','Đang mở bình chọn') + '<p>Đến ' + esc(c.votingEnd) + ' · Bạn có tối đa 2 lượt chấm cho ứng viên team khác. Chấm từng người: chấm 4 tiêu chí thang 1–5, ghi lý do rồi gửi. Phiếu đã gửi không sửa được.</p>' + chip(left < 2 ? 'wait' : 'off', 'Còn ' + left + '/2 lượt') + '</div>' + done +
+  return '<div class="stack"><div class="banner">' + chip('','Đang mở bình chọn') + '<p>Đến ' + esc(c.votingEnd) + ' · Tối đa 2 lượt bình chọn cho ứng viên team khác. Phiếu đã gửi không sửa được.</p>' + chip(left < 2 ? 'wait' : 'off', 'Còn ' + left + '/2 lượt') + '</div>' + done +
     '<div class="vote"><div class="vleft"><div class="card" style="display:flex;flex-direction:column;gap:8px"><h2 class="sec">Chọn ứng viên</h2>' + (d.candidates.length ? list : '<p class="muted">Chưa có ứng viên.</p>') + (full ? '<p class="muted small" style="margin:4px 0 0">Đã chọn đủ số lượt còn lại: bỏ chọn một người để đổi.</p>' : '') + '</div>' +
     '<aside class="card vdef" aria-label="Tiêu chí và thang điểm"><h2 class="sec">Tiêu chí bình chọn</h2>' + CRIT.map(function(k){ return '<div><b style="color:var(--royal)">' + k[2] + ' · ' + k[3] + '%</b><div class="muted small">' + k[4] + '</div></div>'; }).join('') +
     '<h2 class="sec" style="margin-top:4px">Thang điểm 1–5</h2>' + SCALE.map(function(x, i){ return '<div><b>' + (i+1) + ' · ' + x[0] + '</b><div class="muted small">' + x[1] + '</div></div>'; }).join('') + '</aside></div>' +
