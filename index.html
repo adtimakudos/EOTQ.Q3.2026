@@ -136,7 +136,7 @@ var CRIT = [['c1','ev1','Performance & Delivery',35,'Hoàn thành tốt hoặc v
 var SCALE = [['Chưa đáp ứng kỳ vọng','Không đáp ứng yêu cầu cơ bản của tiêu chí. Kết quả hoặc hành vi còn hạn chế, chưa có minh chứng rõ ràng về đóng góp.'],['Đáp ứng một phần kỳ vọng','Đáp ứng một phần yêu cầu nhưng chưa ổn định; mức độ đóng góp còn hạn chế, cần được hỗ trợ hoặc cải thiện thêm.'],['Đáp ứng kỳ vọng','Hoàn thành tốt trách nhiệm và yêu cầu công việc; có những đóng góp phù hợp với phạm vi và kỳ vọng của vị trí.'],['Vượt kỳ vọng','Có đóng góp nổi bật vượt ngoài yêu cầu thông thường; thể hiện sự chủ động và tạo ra giá trị tích cực, rõ ràng cho team hoặc tổ chức.'],['Xuất sắc','Có đóng góp đặc biệt nổi bật trong quý; tạo ra tác động thực tế vượt trội so với kỳ vọng của vị trí, có minh chứng rõ ràng và mang lại giá trị đáng kể cho tổ chức.']];
 function canNom(c){ return c.phase === 'nomination' || c.phase === 'test'; }
 function canVote(c){ return c.phase === 'voting' || c.phase === 'test'; }
-var PHASE = { test:'Test: đề cử & chấm luôn mở', upcoming:'Sắp mở đề cử', nomination:'Đang mở đề cử', review:'Chờ mở chấm điểm', voting:'Đang chấm điểm', closed:'Đã đóng chấm điểm' };
+var PHASE = { test:'Test: đề cử & chấm luôn mở', upcoming:'Sắp mở đề cử', nomination:'Đang mở đề cử', review:'Chờ mở bình chọn', voting:'Đang bình chọn', closed:'Đã đóng bình chọn' };
 var STATUS = { pending:['ok','Đang hiển thị'], approved:['ok','Đang hiển thị'], hidden:['wait','HR đã ẩn'], withdrawn:['off','Đã rút'] };
 var ROLE = { admin:'Admin', leader:'Team Leader', subleader:'Sub-team Leader' };
 
@@ -179,7 +179,7 @@ function go(h){ if (location.hash === h) render(); else location.hash = h; }
 
 function renderDemo(){
   var el = document.getElementById('demo');
-  if (!DEMO) { var cy = (S.home && S.home.cycle) || (S.admin && S.admin.cycle) || (S.pub && S.pub.cycle) || (S.ballot && S.ballot.cycle); el.innerHTML = cy && cy.testMode ? '<div class="demo"><div class="wrap"><b>MÔI TRƯỜNG TEST</b><span>Đề cử và chấm điểm luôn mở, không giới hạn ngày. Dữ liệu ở đây không phải dữ liệu thật.</span></div></div>' : ''; return; }
+  if (!DEMO) { var cy = (S.home && S.home.cycle) || (S.admin && S.admin.cycle) || (S.pub && S.pub.cycle) || (S.ballot && S.ballot.cycle); el.innerHTML = cy && cy.testMode ? '<div class="demo"><div class="wrap"><b>MÔI TRƯỜNG TEST</b><span>Đề cử và bình chọn luôn mở, không giới hạn ngày. Dữ liệu ở đây không phải dữ liệu thật.</span></div></div>' : ''; return; }
   var now = ''; try { now = localStorage.getItem('eoq_demo_now') || ''; } catch(e){}
   var opts = [['','Giờ thật'],['2026-11-11T03:00:00Z','11/11 – đang đề cử'],['2026-11-14T03:00:00Z','14/11 – đang chấm'],['2026-11-18T03:00:00Z','18/11 – đã đóng']];
   el.innerHTML = '<div class="demo"><div class="wrap"><b>CHẾ ĐỘ DEMO</b><span>Dữ liệu minh hoạ. Domain / mã: hr.admin / Q7MX4KTB · binhnv / R2HV9PDN (TL Planner) · cucntt / W8KZ3MFA (Sub-TL) · dunglh / T5NB7QYC (TL Marketing)</span>' +
@@ -192,7 +192,7 @@ function renderTop(r){
   var area = r.indexOf('/admin') === 0 ? 'admin' : (r.indexOf('/de-cu') === 0 || r.indexOf('/cham-diem') === 0 || r === '/trang-chu') ? 'leader' : 'public';
   var nav = [];
   if (area === 'admin') nav = [['#/admin','Tổng quan'],['#/admin/duyet','Quản lý đề cử'],['#/admin/phieu-cham','Cụ thể phiếu chấm'],['#/admin/leader','Danh sách nhân viên & mã']];
-  else if (area === 'leader' || (area === 'public' && u && u.role === 'leader' && r !== '/')) nav = [['#/trang-chu','Trang chủ'],['#/de-cu','Đề cử'],['#/ung-vien','Danh sách bình chọn'],['#/cham-diem','Chấm điểm']];
+  else if (area === 'leader' || (area === 'public' && u && u.role === 'leader' && r !== '/')) nav = [['#/trang-chu','Trang chủ'],['#/de-cu','Đề cử'],['#/ung-vien','Danh sách bình chọn'],['#/cham-diem','Bình chọn']];
   var cur = '#' + r.replace(/\/moi$/, '');
   var html = '<a class="logo" href="#/" aria-label="Adtima – trang chủ"><span class="lw"><b>ad</b>tima</span><span class="tg">Leader in mobile</span></a><nav class="nav" aria-label="Điều hướng">' +
     nav.map(function(n){ return '<a href="' + n[0] + '"' + (n[0] === cur ? ' class="on" aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('') + '</nav>';
@@ -227,7 +227,7 @@ var loadPubAdmin = cachedLoader(function(){ return 'pub'; }, 'candidates', funct
 function loadPub(force){ return S.sess && S.sess.user.role === 'leader' ? loadLeaderAll(force) : loadPubAdmin(force); }
 function keyDates(c){
   var idx = { test:-1, upcoming:-1, nomination:0, review:0.5, voting:1, closed:2 }[c.phase];
-  var items = [[c.nominationStart.split(' ')[0] + '–' + c.nominationEnd.split(' ')[0], 'Đề cử'], [c.votingStart.split(' ')[0] + '–' + c.votingEnd.split(' ')[0], 'Chấm điểm'], [c.finalizeDate, 'Chốt kết quả'], [c.ceremonyDate, 'Lễ trao giải']];
+  var items = [[c.nominationStart.split(' ')[0] + '–' + c.nominationEnd.split(' ')[0], 'Đề cử'], [c.votingStart.split(' ')[0] + '–' + c.votingEnd.split(' ')[0], 'Bình chọn'], [c.finalizeDate, 'Chốt kết quả'], [c.ceremonyDate, 'Lễ trao giải']];
   return '<div class="dates" role="list">' + items.map(function(it, i){
     var cls = i === idx ? 'now' : (i === 3 ? 'end' : '');
     var sub = i === idx ? 'Đang diễn ra' : (i < idx ? 'Đã đóng' : (idx === 0.5 && i === 1 ? 'Sắp mở' : ''));
@@ -246,12 +246,12 @@ function candCard(c){
 function voteBtn(c){
   var u = S.sess && S.sess.user; if (!u || u.role !== 'leader' || !canVote(S.pub.cycle)) return '';
   if (myUnit(u, c)) return '<span class="muted small" style="flex:1 1 auto">Cùng team (hoặc nhóm team) với bạn: không chấm được.</span>';
-  return '<button class="btn sm" style="flex:0 0 auto" data-act="voteFor" data-id="' + esc(c.id) + '">Chấm điểm người này →</button>';
+  return '<button class="btn sm" style="flex:0 0 auto" data-act="voteFor" data-id="' + esc(c.id) + '">Bình chọn người này →</button>';
 }
 function viewChooser(){
   return '<div class="stack" style="padding:16px 0"><div style="text-align:center"><span class="chip">EMPLOYEE OF THE QUARTER</span><h1 style="font-size:clamp(26px,4vw,36px);font-weight:800;color:var(--royal);margin:12px 0 6px">Bạn là ai?</h1><p class="muted" style="margin:0">Chọn vai trò để tiếp tục.</p></div>' +
     '<div class="roles"><a class="role" href="#/ung-vien"><span class="chip off">Nhân viên Adtima</span><h2>Tôi là nhân viên</h2><p class="muted" style="margin:0">Xem danh sách ứng viên được đề cử và thành tích của từng người. Không cần đăng nhập.</p><span class="go">Xem danh sách ứng viên →</span></a>' +
-    '<a class="role" href="#/dang-nhap"><span class="chip">Cần đăng nhập</span><h2>Team Leader · Sub-team Leader · Admin</h2><p class="muted" style="margin:0">Gửi đề cử, chấm điểm ứng viên team khác, hoặc quản trị (HR). Đăng nhập bằng domain và mã HR gửi.</p><span class="go">Đăng nhập →</span></a></div></div>';
+    '<a class="role" href="#/dang-nhap"><span class="chip">Cần đăng nhập</span><h2>Team Leader · Sub-team Leader · Admin</h2><p class="muted" style="margin:0">Gửi đề cử, bình chọn ứng viên team khác, hoặc quản trị (HR). Đăng nhập bằng domain và mã HR gửi.</p><span class="go">Đăng nhập →</span></a></div></div>';
 }
 function viewCandidates(){
   var d = S.pub, c = d.cycle;
@@ -274,7 +274,7 @@ function viewLogin(){
     '<p class="muted" style="margin:0;font-size:15px">Recognizing meaningful impact, strong ownership and continuous improvement.</p>' +
     '<p style="margin:0">Đây là nền tảng để các Team Leader và Sub-team Leader cùng ghi nhận những thành viên có đóng góp nổi bật, thông qua việc đề cử trong team và bình chọn cho ứng viên từ các team khác dựa trên 4 tiêu chí và minh chứng thực tế.</p>' +
     '<div style="display:flex;flex-direction:column;gap:10px">' +
-      [['Đề cử','Gửi đề cử thành viên xuất sắc của team, kèm SOW và minh chứng theo từng tiêu chí.'],['Danh sách bình chọn','Xem toàn bộ ứng viên được đề cử từ các team.'],['Chấm điểm','Chấm điểm ứng viên của các team khác theo 4 tiêu chí, kèm lý do đánh giá.']].map(function(x, i){ return '<div style="display:flex;gap:12px;align-items:flex-start"><span class="av" style="width:32px;height:32px;font-size:13px">' + (i+1) + '</span><div><b>' + x[0] + '</b><div class="muted small">' + x[1] + '</div></div></div>'; }).join('') +
+      [['Đề cử','Gửi đề cử thành viên xuất sắc của team, kèm SOW và minh chứng theo từng tiêu chí.'],['Danh sách bình chọn','Xem toàn bộ ứng viên được đề cử từ các team.'],['Bình chọn','Bình chọn ứng viên của các team khác theo 4 tiêu chí, kèm lý do đánh giá.']].map(function(x, i){ return '<div style="display:flex;gap:12px;align-items:flex-start"><span class="av" style="width:32px;height:32px;font-size:13px">' + (i+1) + '</span><div><b>' + x[0] + '</b><div class="muted small">' + x[1] + '</div></div></div>'; }).join('') +
     '</div></section>' +
     '<form class="card" style="width:100%;display:flex;flex-direction:column;gap:16px;padding:32px" data-submit="login" novalidate>' +
     '<h2 class="sec">Đăng nhập</h2><p class="muted" style="margin:0">Chỉ áp dụng cho Team Leader (hoặc Sub-team Leader). Nhập domain rồi bấm Gửi mã về email. Nếu bạn vẫn chưa nhận được, hãy liên hệ HRBP.</p>' +
@@ -294,11 +294,11 @@ function viewHome(){
   var crit = '<div class="crit">' + CRIT_FULL.map(function(k){ return '<div><h3>' + k[0] + '  ' + k[1].toUpperCase() + '<span>' + k[2] + '%</span></h3><p>' + k[3] + '</p></div>'; }).join('') + '</div>';
   var tabs = [['#/de-cu','Đề cử','Gửi đề cử thành viên xuất sắc của team bạn và theo dõi các đề cử của team.'],
               ['#/ung-vien','Danh sách bình chọn','Xem toàn bộ ứng viên được đề cử từ các team, cùng SOW và lý do đề cử theo từng tiêu chí.'],
-              ['#/cham-diem','Chấm điểm','Chấm điểm ứng viên của các team khác theo 4 tiêu chí, kèm lý do đánh giá.']];
+              ['#/cham-diem','Bình chọn','Bình chọn ứng viên của các team khác theo 4 tiêu chí, kèm lý do đánh giá.']];
   return '<div class="stack">' + heroBlock(c) +
     '<div class="between"><h2 class="sec">Evaluation criteria</h2>' + chip('off','100 điểm · tính theo trọng số') + '</div>' + crit +
     '<section class="card" style="display:flex;flex-direction:column;gap:10px"><h2 class="sec">Về chương trình</h2>' +
-    '<p style="margin:0">Employee of the Quarter ghi nhận cá nhân tạo ra tác động thực tế, chủ động nhận trách nhiệm và cải tiến liên tục trong quý. Trang này là nơi Team Leader và Sub-team Leader đề cử thành viên xuất sắc của team mình, rồi cùng chấm điểm chéo ứng viên của các team khác, dựa trên minh chứng cụ thể.</p>' +
+    '<p style="margin:0">Employee of the Quarter ghi nhận cá nhân tạo ra tác động thực tế, chủ động nhận trách nhiệm và cải tiến liên tục trong quý. Trang này là nơi Team Leader và Sub-team Leader đề cử thành viên xuất sắc của team mình, rồi cùng bình chọn chéo ứng viên của các team khác, dựa trên minh chứng cụ thể.</p>' +
     '<div class="row" style="gap:12px;margin-top:4px">' +
       '<div style="background:var(--bg);border-radius:10px;padding:12px 14px"><b class="small" style="color:var(--royal)">ĐỐI TƯỢNG ĐỀ CỬ</b><div class="small">Nhân viên Full-time và CTV thuộc các team Adtima.</div></div>' +
       '<div style="background:var(--bg);border-radius:10px;padding:12px 14px"><b class="small" style="color:var(--royal)">QUOTA ĐỀ CỬ</b><div class="small">Mỗi team tối thiểu 01, tối đa 10% tổng nhân sự (Full-time + CTV), làm tròn xuống.</div></div>' +
@@ -321,7 +321,7 @@ function teamPick(d){ if (!d.teams || d.teams.length < 2) return ''; var cu = cu
 function myUnit(u, c){ var mu = (u.units && u.units.length) ? u.units : [u.unit], bl = u.block || []; return [c.unit].concat(c.cunits || []).some(function(x){ return mu.indexOf(x) >= 0 || bl.some(function(p){ return String(x).toLowerCase().indexOf(p) === 0; }); }); }
 function viewLeader(){
   var d = S.home, c = d.cycle, t = curTeam(d), canN = canNom(c) && t.used < t.quotaMax;
-  var msg = { test:'Môi trường TEST: đề cử và chấm điểm luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', review:'Đã đóng đề cử. Chấm điểm mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Chấm điểm đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đã kết thúc đề cử và chấm điểm. Chỉ xem danh sách đề cử ở mục Ứng viên.' }[c.phase];
+  var msg = { test:'Môi trường TEST: đề cử và bình chọn luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', review:'Đã đóng đề cử. Bình chọn mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Bình chọn đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đã kết thúc đề cử và bình chọn. Chỉ xem danh sách đề cử ở mục Ứng viên.' }[c.phase];
   var pct = Math.min(100, Math.round(t.used / t.quotaMax * 100));
   return '<div class="stack">' + phaseBanner(c, msg) + teamPick(d) +
     '<div class="row"><div class="card stat"><small>Team của bạn</small><b>' + esc(t.unit) + '</b><span class="muted small">' + esc(ROLE[d.me.leaderType] || 'Leader') + '</span></div>' +
@@ -333,7 +333,7 @@ function viewLeader(){
     '<h2 class="sec">Đề cử của team</h2>' + (d.nominations.filter(function(n){ return n.unit === t.unit; }).length ? '<div class="tbl"><table><thead><tr><th>Ứng viên</th><th>Title</th><th>Gửi lúc</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>' +
     d.nominations.filter(function(n){ return n.unit === t.unit; }).map(function(n){ var canW = canNom(c) && n.status !== 'withdrawn';
       return '<tr><td><b>' + esc(n.candidateName) + '</b><div class="muted small">' + esc(n.candidateDomain) + ' · đề cử bởi ' + esc(n.nominatorName) + '</div></td><td>' + esc(n.title) + '</td><td>' + fmtTime(n.createdAt) + '</td><td>' + stChip(n.status) + (n.hrNote ? '<div class="small" style="margin-top:4px">HR: ' + esc(n.hrNote) + '</div>' : '') + '</td><td>' + (canW ? '<button class="link" data-act="withdraw" data-id="' + esc(n.id) + '">Rút đề cử</button>' : '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<div class="card empty">Team chưa có đề cử nào.</div>') +
-    '<div class="card between"><div><b style="font-size:15px">Chấm điểm: ' + esc(c.votingStart) + ' – ' + esc(c.votingEnd) + '</b><div class="muted small">Bạn có tối đa 2 lượt chấm cho ứng viên team khác, chấm từng người. Phiếu đã gửi không sửa được.</div></div><a class="btn btn2" href="#/cham-diem">Đến trang chấm điểm</a></div></div>';
+    '<div class="card between"><div><b style="font-size:15px">Bình chọn: ' + esc(c.votingStart) + ' – ' + esc(c.votingEnd) + '</b><div class="muted small">Bạn có tối đa 2 lượt chấm cho ứng viên team khác, chấm từng người. Phiếu đã gửi không sửa được.</div></div><a class="btn btn2" href="#/cham-diem">Đến trang bình chọn</a></div></div>';
 }
 function viewForm(){
   var d = S.home, c = d.cycle, t = curTeam(d);
@@ -371,7 +371,7 @@ function viewVote(){
   if (left <= 0) return receipt(d.myVotes);
   var votedIds = d.myVotes.map(function(v){ return v.nominationId; });
   var done = d.myVotes.length ? '<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="between"><h2 class="sec">Phiếu đã gửi</h2>' + chip('ok', d.myVotes.length + '/2 lượt đã dùng') + '</div>' + d.myVotes.map(function(x){ return '<div class="between small"><span><b>' + esc(x.candidateName) + '</b> · ' + esc(x.candidateUnit) + ' · ' + x.c1 + '-' + x.c2 + '-' + x.c3 + '-' + x.c4 + '</span><b style="color:var(--royal)">' + x.total + ' / 100</b></div>'; }).join('') + '</div>' : '';
-  if (!canVote(c)) return '<div class="stack">' + phaseBanner(c, c.phase === 'closed' ? 'Đã hết thời gian chấm điểm.' : 'Chấm điểm mở từ ' + esc(c.votingStart) + ' đến ' + esc(c.votingEnd) + '.') + '<div class="card empty">Trang chấm điểm sẽ mở theo lịch.</div></div>';
+  if (!canVote(c)) return '<div class="stack">' + phaseBanner(c, c.phase === 'closed' ? 'Đã hết thời gian bình chọn.' : 'Bình chọn mở từ ' + esc(c.votingStart) + ' đến ' + esc(c.votingEnd) + '.') + '<div class="card empty">Trang bình chọn sẽ mở theo lịch.</div></div>';
   var groups = {}; d.candidates.forEach(function(x){ (groups[x.unit] = groups[x.unit] || []).push(x); });
   var units = Object.keys(groups).sort(function(a, b){ var la = groups[a][0].locked, lb = groups[b][0].locked; return la === lb ? a.localeCompare(b) : (la ? 1 : -1); });
   S.sel = S.sel.filter(function(id){ return votedIds.indexOf(id) < 0; }).slice(0, left);
@@ -388,10 +388,10 @@ function viewVote(){
       '<div><div class="lab">SOW</div><div class="pre small">' + esc(x.sow) + '</div></div>' +
       CRIT.map(function(k){ var v = sc[k[0]]; return '<div class="ev" style="display:flex;flex-direction:column;gap:10px"><b><span>' + k[2] + '</span><span>Trọng số ' + k[3] + '%</span></b><div class="pre small">' + esc(x[k[1]]) + '</div>' +
         '<div class="crow"><div class="lvl">' + (v ? '<b style="color:var(--ink)">' + v + ' · ' + SCALE[v-1][0] + '</b><br>' + SCALE[v-1][1] : 'Chọn điểm 1–5 (định nghĩa ở cột bên trái).') + '</div><div class="seg" role="radiogroup" aria-label="' + k[2] + ' – ' + esc(x.candidateName) + '">' + [1,2,3,4,5].map(function(n){ return '<button role="radio" aria-checked="' + (v === n) + '" class="' + (v === n ? 'on' : '') + '" data-act="rate" data-id="' + esc(id) + '" data-k="' + k[0] + '" data-n="' + n + '" title="' + n + ' – ' + SCALE[n-1][0] + ': ' + SCALE[n-1][1] + '">' + n + '</button>'; }).join('') + '</div></div></div>'; }).join('') +
-      '<div><label class="lbl" for="cm-' + esc(id) + '">Lý do chấm điểm (chung cho cả 4 tiêu chí) *</label><textarea class="in" id="cm-' + esc(id) + '" data-input="note" data-id="' + esc(id) + '" maxlength="1000" rows="3" placeholder="VD: Minh chứng KPI rõ ràng, tác động trực tiếp tới doanh thu…">' + esc(S.notes[id] || '') + '</textarea></div></section>'; }).join('');
-  return '<div class="stack"><div class="banner">' + chip('','Đang mở chấm điểm') + '<p>Đến ' + esc(c.votingEnd) + ' · Bạn có tối đa 2 lượt chấm cho ứng viên team khác. Chấm từng người: chấm 4 tiêu chí thang 1–5, ghi lý do rồi gửi. Phiếu đã gửi không sửa được.</p>' + chip(left < 2 ? 'wait' : 'off', 'Còn ' + left + '/2 lượt') + '</div>' + done +
+      '<div><label class="lbl" for="cm-' + esc(id) + '">Lý do bình chọn (chung cho cả 4 tiêu chí) *</label><textarea class="in" id="cm-' + esc(id) + '" data-input="note" data-id="' + esc(id) + '" maxlength="1000" rows="3" placeholder="VD: Minh chứng KPI rõ ràng, tác động trực tiếp tới doanh thu…">' + esc(S.notes[id] || '') + '</textarea></div></section>'; }).join('');
+  return '<div class="stack"><div class="banner">' + chip('','Đang mở bình chọn') + '<p>Đến ' + esc(c.votingEnd) + ' · Bạn có tối đa 2 lượt chấm cho ứng viên team khác. Chấm từng người: chấm 4 tiêu chí thang 1–5, ghi lý do rồi gửi. Phiếu đã gửi không sửa được.</p>' + chip(left < 2 ? 'wait' : 'off', 'Còn ' + left + '/2 lượt') + '</div>' + done +
     '<div class="vote"><div class="vleft"><div class="card" style="display:flex;flex-direction:column;gap:8px"><h2 class="sec">Chọn ứng viên</h2>' + (d.candidates.length ? list : '<p class="muted">Chưa có ứng viên.</p>') + (full ? '<p class="muted small" style="margin:4px 0 0">Đã chọn đủ số lượt còn lại: bỏ chọn một người để đổi.</p>' : '') + '</div>' +
-    '<aside class="card vdef" aria-label="Tiêu chí và thang điểm"><h2 class="sec">Tiêu chí chấm điểm</h2>' + CRIT.map(function(k){ return '<div><b style="color:var(--royal)">' + k[2] + ' · ' + k[3] + '%</b><div class="muted small">' + k[4] + '</div></div>'; }).join('') +
+    '<aside class="card vdef" aria-label="Tiêu chí và thang điểm"><h2 class="sec">Tiêu chí bình chọn</h2>' + CRIT.map(function(k){ return '<div><b style="color:var(--royal)">' + k[2] + ' · ' + k[3] + '%</b><div class="muted small">' + k[4] + '</div></div>'; }).join('') +
     '<h2 class="sec" style="margin-top:4px">Thang điểm 1–5</h2>' + SCALE.map(function(x, i){ return '<div><b>' + (i+1) + ' · ' + x[0] + '</b><div class="muted small">' + x[1] + '</div></div>'; }).join('') + '</aside></div>' +
     '<div class="stack" style="gap:20px">' + (panels || '<div class="card empty">Chọn ứng viên ở cột bên trái để bắt đầu chấm.</div>') +
     '<div class="card between" style="padding:14px 20px"><span class="muted small">Kiểm tra kỹ trước khi gửi vì phiếu không sửa được.</span><button class="btn" data-act="reviewVote"' + (S.sel.length ? '' : ' disabled') + '>Gửi phiếu chấm</button></div></div></div></div>';
@@ -400,7 +400,7 @@ function confirmVote(){
   var d = S.ballot;
   for (var i = 0; i < S.sel.length; i++) { var id = S.sel[i], sc = S.scores[id] || {}, x = d.candidates.filter(function(k){ return k.id === id; })[0];
     if (!CRIT.every(function(k){ return sc[k[0]]; })) { toast('Chấm đủ 4 tiêu chí cho ' + x.candidateName + '.'); return; }
-    if (!String(S.notes[id] || '').trim()) { toast('Ghi lý do chấm điểm cho ' + x.candidateName + '.'); var t = document.getElementById('cm-' + id); if (t) t.focus(); return; } }
+    if (!String(S.notes[id] || '').trim()) { toast('Ghi lý do bình chọn cho ' + x.candidateName + '.'); var t = document.getElementById('cm-' + id); if (t) t.focus(); return; } }
   var rows = S.sel.map(function(id){ var x = d.candidates.filter(function(k){ return k.id === id; })[0]; var sc = S.scores[id];
     return '<tr><td>' + esc(x.candidateName) + '</td><td>' + sc.c1 + '</td><td>' + sc.c2 + '</td><td>' + sc.c3 + '</td><td>' + sc.c4 + '</td><td><b>' + score(sc) + '</b></td></tr><tr><td colspan="6" class="small muted pre">Lý do: ' + esc(S.notes[id]) + '</td></tr>'; }).join('');
   modal('<div class="icon" aria-hidden="true">!</div><h2 id="mt" style="font-size:22px;font-weight:800">Xác nhận gửi phiếu chấm</h2><p style="margin:0">Sau khi gửi, bạn <b>không thể chỉnh sửa điểm hay lý do</b> của phiếu này. ' + (2 - S.ballot.myVotes.length - S.sel.length > 0 ? 'Bạn sẽ còn <b>' + (2 - S.ballot.myVotes.length - S.sel.length) + ' lượt</b> để chấm ứng viên khác.' : 'Đây là lượt chấm cuối cùng của bạn.') + '</p>' +
@@ -441,7 +441,7 @@ function viewAdmin(){
   var thin = d.ranking.filter(function(r){ return !r.eligible; }).length;
   var teamsDone = d.teams.filter(function(t){ return t.nominated > 0; }).length;
   var top = d.ranking.filter(function(r){ return r.judges > 0; }).slice(0, 3);
-  return '<div class="stack"><div class="card between"><div><h1 style="font-size:20px;font-weight:800;color:var(--royal)">Đợt ' + esc(c.cycleName) + '</h1><div class="muted small">Đề cử ' + esc(c.nominationStart) + ' – ' + esc(c.nominationEnd) + ' · Chấm điểm ' + esc(c.votingStart) + ' – ' + esc(c.votingEnd) + ' · Chốt ' + esc(c.finalizeDate) + ' · Trao giải ' + esc(c.ceremonyDate) + '</div></div>' + chip(canNom(c) || canVote(c) ? '' : 'off', PHASE[c.phase]) + '</div>' +
+  return '<div class="stack"><div class="card between"><div><h1 style="font-size:20px;font-weight:800;color:var(--royal)">Đợt ' + esc(c.cycleName) + '</h1><div class="muted small">Đề cử ' + esc(c.nominationStart) + ' – ' + esc(c.nominationEnd) + ' · Bình chọn ' + esc(c.votingStart) + ' – ' + esc(c.votingEnd) + ' · Chốt ' + esc(c.finalizeDate) + ' · Trao giải ' + esc(c.ceremonyDate) + '</div></div>' + chip(canNom(c) || canVote(c) ? '' : 'off', PHASE[c.phase]) + '</div>' +
     '<div class="row"><div class="card stat"><small>Đề cử đang hiệu lực</small><b>' + active.length + '</b><span class="muted small">' + teamsDone + '/' + d.teams.length + ' team đã đề cử</span></div><div class="card stat"><small>Team chưa đề cử</small><b style="color:' + (noNom ? 'var(--waitInk)' : 'var(--royal)') + '">' + noNom + '</b><span class="muted small">Mỗi team tối thiểu 01 đề cử</span></div>' +
     '<div class="card stat"><small>Leader đã chấm</small><b>' + voted + ' / ' + leaders.length + '</b><span class="muted small">' + (leaders.length - voted) + ' người chưa gửi phiếu</span></div><div class="card stat"><small>Ứng viên &lt; ' + s.minJudges + ' giám khảo</small><b style="color:' + (thin ? 'var(--waitInk)' : 'var(--royal)') + '">' + thin + '</b><span class="muted small">Chưa đủ điều kiện xếp hạng</span></div></div>' +
     '<div class="two"><div class="stack" style="gap:14px"><h2 class="sec">Tiến độ theo team</h2><div class="tbl"><table><thead><tr><th>Team</th><th>Nhân sự</th><th>Quota tối đa <span title="Tối thiểu 1, tối đa 10% số lượng nhân viên (nếu là số thập phân, làm tròn xuống)">ⓘ</span></th><th>Đã đề cử</th><th>Leader chấm</th><th>Trạng thái</th></tr></thead><tbody>' +
@@ -648,7 +648,7 @@ var ACT = {
   exportVotes: function(){ var d = S.admin; csv('phieu-cham-' + d.cycle.cycleName.replace(/\W+/g, '-') + '.csv', [['Giám khảo','Domain','Team giám khảo','Ứng viên','Team ứng viên','Performance','Impact','Ownership','Innovation','Tổng /100','Lý do','Gửi lúc']].concat(d.votes.map(function(v){ return [v.voterName, v.voterDomain, v.voterUnit, v.candidateName, v.candidateUnit, v.c1, v.c2, v.c3, v.c4, v.total, v.comment, fmtTime(v.createdAt)]; }))); },
   exportUsers: function(){ csv('leader-ma-dang-nhap.csv', [['Họ tên','Domain','Vai trò','Team','Mã đăng nhập']].concat(S.admin.users.map(function(u){ return [u.name, u.domain, ROLE[u.role] || u.role, u.unit, u.accessCode]; }))); },
   peek: function(el){ S.peek[el.dataset.id] = !S.peek[el.dataset.id]; refresh(); },
-  voteFor: function(el){ var id = el.dataset.id; if (S.sel.indexOf(id) < 0) { if (S.sel.length >= 2 - (S.ballot ? S.ballot.myVotes.length : 0)) { toast('Bạn đã chọn đủ 2 ứng viên. Bỏ chọn một người ở trang Chấm điểm để đổi.'); go('#/cham-diem'); return; } S.sel.push(id); } go('#/cham-diem'); },
+  voteFor: function(el){ var id = el.dataset.id; if (S.sel.indexOf(id) < 0) { if (S.sel.length >= 2 - (S.ballot ? S.ballot.myVotes.length : 0)) { toast('Bạn đã chọn đủ 2 ứng viên. Bỏ chọn một người ở trang Bình chọn để đổi.'); go('#/cham-diem'); return; } S.sel.push(id); } go('#/cham-diem'); },
   editEmp: function(el){ S.editEmp = el.dataset.id; refresh(); },
   cancelEmp: function(){ S.editEmp = null; refresh(); },
   empAll: function(){ S.empAll = true; refresh(); },
