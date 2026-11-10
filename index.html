@@ -277,10 +277,10 @@ function viewLogin(){
       [['Đề cử','Gửi đề cử thành viên xuất sắc của team, kèm SOW và minh chứng theo từng tiêu chí.'],['Danh sách bình chọn','Xem toàn bộ ứng viên được đề cử từ các team.'],['Chấm điểm','Chấm điểm ứng viên của các team khác theo 4 tiêu chí, kèm lý do đánh giá.']].map(function(x, i){ return '<div style="display:flex;gap:12px;align-items:flex-start"><span class="av" style="width:32px;height:32px;font-size:13px">' + (i+1) + '</span><div><b>' + x[0] + '</b><div class="muted small">' + x[1] + '</div></div></div>'; }).join('') +
     '</div></section>' +
     '<form class="card" style="width:100%;display:flex;flex-direction:column;gap:16px;padding:32px" data-submit="login" novalidate>' +
-    '<h2 class="sec">Đăng nhập</h2><p class="muted" style="margin:0">Chỉ áp dụng cho Team Leader (hoặc Sub-team Leader). Dùng domain VNG của bạn và mã đăng nhập HR gửi.</p>' +
-    '<div><label class="lbl" for="dm">Domain của bạn</label><input class="in" id="dm" name="domain" autocomplete="username" placeholder="VD: binhnv" required></div>' +
+    '<h2 class="sec">Đăng nhập</h2><p class="muted" style="margin:0">Chỉ áp dụng cho Team Leader (hoặc Sub-team Leader). Nhập domain rồi bấm Gửi mã về email. Nếu bạn vẫn chưa nhận được, hãy liên hệ HRBP.</p>' +
+    '<div><label class="lbl" for="dm">Domain của bạn</label><input class="in" id="dm" name="domain" autocomplete="username" placeholder="VD: binhnv" required><button type="button" class="link small" data-act="reqCode" style="padding:0;margin-top:8px">Gửi mã về email →</button></div>' +
     '<div><label class="lbl" for="cd">Mã đăng nhập</label><input class="in code" id="cd" name="code" autocomplete="off" required></div>' +
-    '<div id="lerr" aria-live="assertive"></div><button class="btn" type="submit">Đăng nhập</button><p class="muted small" style="margin:0">Chưa có hoặc quên mã? Nhập domain rồi bấm <button type="button" class="link small" data-act="reqCode" style="padding:0">Gửi mã về email</button>. Vẫn chưa nhận được, liên hệ HRBP.</p></form></div>';
+    '<div id="lerr" aria-live="assertive"></div><button class="btn" type="submit">Đăng nhập</button></form></div>';
 }
 
 /* ---------- Trang chủ (leader) ---------- */
@@ -344,7 +344,7 @@ function viewForm(){
     '<h2 class="part" style="border:0;padding:0">I. Thông tin ứng viên</h2>' +
     '<div class="row"><div><label class="lbl" for="f1">Team của bạn</label><input class="in" id="f1" readonly value="' + esc(t.unit) + '"></div><div><label class="lbl" for="f2">Domain của bạn</label><input class="in" id="f2" readonly value="' + esc(d.me.domain) + '"></div></div>' +
     '<div><label class="lbl" for="candidateDomain">Domain của người bạn muốn đề cử *</label><input class="in" id="candidateDomain" name="candidateDomain" list="members" autocomplete="off" placeholder="VD: tuanlq" data-input="cand" required><datalist id="members">' +
-    d.members.filter(function(m){ return m.domain !== d.me.domain && (!m.units || m.units.indexOf(t.unit) >= 0); }).map(function(m){ return '<option value="' + esc(m.domain) + '">' + esc(m.name + ' · ' + m.title) + '</option>'; }).join('') + '</datalist><div class="match" id="cmatch"><span class="muted">Họ tên và title sẽ tự hiện theo danh sách nhân viên của HR.</span></div></div>' +
+    d.members.filter(function(m){ return !m.units || m.units.indexOf(t.unit) >= 0; }).map(function(m){ return '<option value="' + esc(m.domain) + '">' + esc(m.name + ' · ' + m.title) + '</option>'; }).join('') + '</datalist><div class="match" id="cmatch"><span class="muted">Họ tên và title sẽ tự hiện theo danh sách nhân viên của HR.</span></div></div>' +
     area('sow','SOW (phạm vi công việc) *','Phạm vi công việc chính của ứng viên trong quý.',1000,4) +
     '<h2 class="part">II. Lý do đề cử: nêu rõ minh chứng</h2><p class="muted small" style="margin:-8px 0 0">Với mỗi tiêu chí: chọn mức đánh giá 1–5 và liệt kê minh chứng cụ thể.</p>' +
     CRIT.map(function(k, i){ var rk = RK[k[1]];
