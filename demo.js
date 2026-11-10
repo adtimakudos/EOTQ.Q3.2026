@@ -67,7 +67,7 @@ var DEFAULT_SETTINGS = [
   ['votingEnd', '2026-11-17 23:59', 'Đóng bình chọn hết ngày 17/11'],
   ['finalizeDate', '18/11', 'Chỉ để hiển thị'],
   ['ceremonyDate', '19/11', 'Chỉ để hiển thị'],
-  ['prize', '2.000.000 VNĐ', ''],
+  ['prize', '2.000.000 VNĐ + Chứng nhận', ''],
   ['minJudges', '2', 'Số giám khảo tối thiểu để được xếp hạng'],
   ['rankingMethod', 'average', 'average = điểm trung bình các phiếu; sum = tổng điểm']
 ];
