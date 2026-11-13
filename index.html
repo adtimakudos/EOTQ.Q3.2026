@@ -149,9 +149,9 @@ var S = { peek: {}, imp: null, sess: load(), pub: null, home: null, ballot: null
 var RK = { ev1:'r1', ev2:'r2', ev3:'r3', ev4:'r4' };
 var CRIT = [['c1','ev1','Performance & Delivery',35,'Hoàn thành tốt hoặc vượt mục tiêu, KPI và các cam kết công việc trong quý; đảm bảo chất lượng, tiến độ và hiệu quả thực thi.'],['c2','ev2','Impact & Contribution',30,'Tạo ra giá trị cụ thể cho team, khách hàng hoặc tổ chức thông qua kết quả kinh doanh, cải thiện chất lượng dịch vụ, tối ưu quy trình, tiết kiệm nguồn lực hoặc nâng cao hiệu quả hoạt động.'],['c3','ev3','Ownership & Proactiveness',20,'Thể hiện tinh thần chủ động, trách nhiệm trong công việc; tích cực giải quyết vấn đề, phối hợp và hỗ trợ đồng đội. Chủ động tham gia các hoạt động chung của Adtima, lan tỏa và chia sẻ kiến thức, kinh nghiệm với đồng nghiệp, đóng góp tích cực cho cộng đồng nội bộ ngoài phạm vi công việc hằng ngày.'],['c4','ev4','Improvement & Innovation',15,'Chủ động đề xuất và áp dụng các cải tiến, cách làm mới hoặc công nghệ mới, đặc biệt là tích cực ứng dụng AI vào công việc nhằm nâng cao năng suất, chất lượng và hiệu quả thực thi. Ghi nhận cả những cải tiến nhỏ nhưng có tính ứng dụng và mang lại hiệu quả thực tế.']];
 var SCALE = [['Chưa đáp ứng kỳ vọng','Không đáp ứng yêu cầu cơ bản của tiêu chí. Kết quả hoặc hành vi còn hạn chế, chưa có minh chứng rõ ràng về đóng góp.'],['Đáp ứng một phần kỳ vọng','Đáp ứng một phần yêu cầu nhưng chưa ổn định; mức độ đóng góp còn hạn chế, cần được hỗ trợ hoặc cải thiện thêm.'],['Đáp ứng kỳ vọng','Hoàn thành tốt trách nhiệm và yêu cầu công việc; có những đóng góp phù hợp với phạm vi và kỳ vọng của vị trí.'],['Vượt kỳ vọng','Có đóng góp nổi bật vượt ngoài yêu cầu thông thường; thể hiện sự chủ động và tạo ra giá trị tích cực, rõ ràng cho team hoặc tổ chức.'],['Xuất sắc','Có đóng góp đặc biệt nổi bật trong quý; tạo ra tác động thực tế vượt trội so với kỳ vọng của vị trí, có minh chứng rõ ràng và mang lại giá trị đáng kể cho tổ chức.']];
-function canNom(c){ return c.phase === 'nomination' || c.phase === 'test'; }
-function canVote(c){ return c.phase === 'voting' || c.phase === 'test'; }
-var PHASE = { test:'Test: đề cử & chấm luôn mở', upcoming:'Sắp mở đề cử', nomination:'Đang mở đề cử', review:'Chờ mở bình chọn', voting:'Đang bình chọn', closed:'Đã đóng bình chọn' };
+function canNom(c){ return c.phase === 'nomination' || c.phase === 'both' || c.phase === 'test'; }
+function canVote(c){ return c.phase === 'voting' || c.phase === 'both' || c.phase === 'test'; }
+var PHASE = { test:'Test: đề cử & chấm luôn mở', upcoming:'Sắp mở đề cử', nomination:'Đang mở đề cử', both:'Đang đề cử & bình chọn', review:'Chờ mở bình chọn', voting:'Đang bình chọn', closed:'Đã đóng bình chọn' };
 var STATUS = { pending:['ok','Đang hiển thị'], approved:['ok','Đang hiển thị'], hidden:['wait','HR đã ẩn'], withdrawn:['off','Đã rút'] };
 var ROLE = { admin:'Admin', leader:'Team Leader', subleader:'Sub-team Leader' };
 
@@ -196,7 +196,7 @@ function renderDemo(){
   var el = document.getElementById('demo');
   if (!DEMO) { var cy = (S.home && S.home.cycle) || (S.admin && S.admin.cycle) || (S.pub && S.pub.cycle) || (S.ballot && S.ballot.cycle); el.innerHTML = cy && cy.testMode ? '<div class="demo"><div class="wrap"><b>MÔI TRƯỜNG TEST</b><span>Đề cử và bình chọn luôn mở, không giới hạn ngày. Dữ liệu ở đây không phải dữ liệu thật.</span></div></div>' : ''; return; }
   var now = ''; try { now = localStorage.getItem('eoq_demo_now') || ''; } catch(e){}
-  var opts = [['','Giờ thật'],['2026-11-11T03:00:00Z','11/11 – đang đề cử'],['2026-11-14T03:00:00Z','14/11 – đang chấm'],['2026-11-18T03:00:00Z','18/11 – đã đóng']];
+  var opts = [['','Giờ thật'],['2026-11-11T03:00:00Z','11/11 – đang đề cử'],['2026-11-13T03:00:00Z','13/11 – đề cử & bình chọn cùng mở'],['2026-11-14T03:00:00Z','14/11 – đang bình chọn'],['2026-11-18T03:00:00Z','18/11 – đã đóng']];
   el.innerHTML = '<div class="demo"><div class="wrap"><b>CHẾ ĐỘ DEMO</b><span>Dữ liệu minh hoạ. Domain / mã: hr.admin / Q7MX4KTB · binhnv / R2HV9PDN (TL Planner) · cucntt / W8KZ3MFA (Sub-TL) · dunglh / T5NB7QYC (TL Marketing)</span>' +
     '<label>Giả lập thời gian <select data-change="demoNow" aria-label="Giả lập thời gian">' + opts.map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === now ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
     '<button data-act="demoReset">Reset: chưa có đề cử</button><button data-act="demoSample">Nạp dữ liệu mẫu</button></div></div>';
@@ -241,11 +241,11 @@ var loadLeaderAll = cachedLoader(function(){ return 'home'; }, 'leaderAll', appl
 var loadPubAdmin = cachedLoader(function(){ return 'pub'; }, 'candidates', function(d){ S.pub = d; });
 function loadPub(force){ return S.sess && S.sess.user.role === 'leader' ? loadLeaderAll(force) : loadPubAdmin(force); }
 function keyDates(c){
-  var idx = { test:-1, upcoming:-1, nomination:0, review:0.5, voting:1, closed:2 }[c.phase];
+  var idx = { test:-1, upcoming:-1, nomination:0, both:0, review:0.5, voting:1, closed:2 }[c.phase], both = c.phase === 'both';
   var items = [[c.nominationStart.split(' ')[0] + '–' + c.nominationEnd.split(' ')[0], 'Đề cử'], [c.votingStart.split(' ')[0] + '–' + c.votingEnd.split(' ')[0], 'Bình chọn'], [c.finalizeDate, 'Chốt kết quả'], [c.ceremonyDate, 'Lễ trao giải']];
   return '<div class="dates" role="list">' + items.map(function(it, i){
-    var cls = i === idx ? 'now' : (i === 3 ? 'end' : '');
-    var sub = i === idx ? 'Đang diễn ra' : (i < idx ? 'Đã đóng' : (idx === 0.5 && i === 1 ? 'Sắp mở' : ''));
+    var cls = (i === idx || (both && i === 1)) ? 'now' : (i === 3 ? 'end' : '');
+    var sub = (i === idx || (both && i === 1)) ? 'Đang diễn ra' : (i < idx ? 'Đã đóng' : (idx === 0.5 && i === 1 ? 'Sắp mở' : ''));
     return '<div role="listitem" class="' + cls + '"><b>' + esc(it[0]) + '</b><span>' + it[1] + '</span>' + (sub ? '<em>' + sub + '</em>' : '') + '</div>';
   }).join('') + '</div>';
 }
@@ -336,7 +336,7 @@ function teamPick(d){ if (!d.teams || d.teams.length < 2) return ''; var cu = cu
 function myUnit(u, c){ var mu = (u.units && u.units.length) ? u.units : [u.unit], bl = u.block || []; return [c.unit].concat(c.cunits || []).some(function(x){ return mu.indexOf(x) >= 0 || bl.some(function(p){ return String(x).toLowerCase().indexOf(p) === 0; }); }); }
 function viewLeader(){
   var d = S.home, c = d.cycle, t = curTeam(d), canN = canNom(c) && t.used < t.quotaMax;
-  var msg = { test:'Môi trường TEST: đề cử và bình chọn luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', review:'Đã đóng đề cử. Bình chọn mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Bình chọn đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đã kết thúc đề cử và bình chọn. Chỉ xem danh sách đề cử ở mục Ứng viên.' }[c.phase];
+  var msg = { test:'Môi trường TEST: đề cử và bình chọn luôn mở, không giới hạn ngày.', upcoming:'Đề cử mở từ ' + esc(c.nominationStart) + '.', nomination:'Gửi đề cử đến ' + esc(c.nominationEnd) + '. Đề cử hiển thị ngay trên trang ứng viên sau khi gửi.', both:'Đề cử đến ' + esc(c.nominationEnd) + '; bình chọn đã mở, đến ' + esc(c.votingEnd) + '.', review:'Đã đóng đề cử. Bình chọn mở từ ' + esc(c.votingStart) + '.', voting:'Đã đóng đề cử. Bình chọn đang mở đến ' + esc(c.votingEnd) + '.', closed:'Đã kết thúc đề cử và bình chọn. Chỉ xem danh sách đề cử ở mục Ứng viên.' }[c.phase];
   var pct = Math.min(100, Math.round(t.used / t.quotaMax * 100));
   return '<div class="stack">' + phaseBanner(c, msg) + teamPick(d) +
     '<div class="row"><div class="card stat"><small>Team của bạn</small><b>' + esc(t.unit) + '</b><span class="muted small">' + esc(ROLE[d.me.leaderType] || 'Leader') + '</span></div>' +
