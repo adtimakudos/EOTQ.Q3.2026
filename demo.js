@@ -62,8 +62,8 @@ var SHEETS = {
 var DEFAULT_SETTINGS = [
   ['cycleName', 'Q3/2026', 'Tên đợt hiển thị trên web'],
   ['nominationStart', '2026-11-10 09:00', 'Giờ Việt Nam, định dạng YYYY-MM-DD HH:mm'],
-  ['nominationEnd', '2026-11-12 23:59', 'Đóng đề cử hết ngày 12/11'],
-  ['votingStart', '2026-11-13 00:00', 'Mở bình chọn'],
+  ['nominationEnd', '2026-11-13 23:59', 'Đóng đề cử hết ngày 13/11'],
+  ['votingStart', '2026-11-13 00:00', 'Mở bình chọn (có thể trùng ngày cuối đề cử, khi đó đề cử và bình chọn cùng mở)'],
   ['votingEnd', '2026-11-17 23:59', 'Đóng bình chọn hết ngày 17/11'],
   ['finalizeDate', '18/11', 'Chỉ để hiển thị'],
   ['ceremonyDate', '19/11', 'Chỉ để hiển thị'],
@@ -343,9 +343,12 @@ function phase_(s) {
   var ns = parseDate_(s.nominationStart), ne = parseDate_(s.nominationEnd);
   var vs = parseDate_(s.votingStart), ve = parseDate_(s.votingEnd);
   if (ns && n < ns.getTime()) return 'upcoming';
-  if (ne && n <= ne.getTime() + 59999) return 'nomination';
+  var inNom = !!(ne && n <= ne.getTime() + 59999);
+  var inVote = !!(vs && n >= vs.getTime() && ve && n <= ve.getTime() + 59999);
+  if (inNom && inVote) return 'both';   // đề cử và bình chọn cùng mở (khi votingStart <= nominationEnd)
+  if (inNom) return 'nomination';
   if (vs && n < vs.getTime()) return 'review';
-  if (ve && n <= ve.getTime() + 59999) return 'voting';
+  if (inVote) return 'voting';
   return 'closed';
 }
 
@@ -566,7 +569,7 @@ function clean_(v, max, label, required) {
 function submitNomination_(me, d) {
   requireLeader_(me);
   var s = settings_();
-  if (['nomination', 'test'].indexOf(phase_(s)) < 0) throw new Error('Hiện không trong thời gian đề cử.');
+  if (['nomination', 'both', 'test'].indexOf(phase_(s)) < 0) throw new Error('Hiện không trong thời gian đề cử.');
   var myUnits = me.leads && me.leads.length ? me.leads : [me.unit];
   var un = str_(d.unit) || myUnits[0];
   if (myUnits.indexOf(un) < 0) throw new Error('Bạn không phụ trách team "' + un + '".');
@@ -599,7 +602,7 @@ function submitNomination_(me, d) {
 
 function withdrawNomination_(me, id) {
   requireLeader_(me);
-  if (['nomination', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Đã hết thời gian đề cử.');
+  if (['nomination', 'both', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Đã hết thời gian đề cử.');
   var n = rows_('Nominations').filter(function (x) { return str_(x.id) === str_(id); })[0];
   if (!n || (me.leads && me.leads.length ? me.leads : [me.unit]).indexOf(str_(n.unit)) < 0) throw new Error('Không tìm thấy đề cử.');
   if (n.status === 'withdrawn') throw new Error('Đề cử đã được rút.');
@@ -637,7 +640,7 @@ function ballot_(me) {
 
 function submitVote_(me, entries) {
   requireLeader_(me);
-  if (['voting', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Hiện không trong thời gian bình chọn.');
+  if (['voting', 'both', 'test'].indexOf(phase_(settings_())) < 0) throw new Error('Hiện không trong thời gian bình chọn.');
   var mine = liveVotes_().filter(function (v) { return dom_(v.voterDomain) === me.domain; });
   if (!Array.isArray(entries) || entries.length < 1) throw new Error('Chọn ứng viên để chấm.');
   if (mine.length + entries.length > 2) throw new Error(mine.length >= 2 ? 'Bạn đã dùng hết 2 lượt chấm.' : 'Bạn chỉ còn ' + (2 - mine.length) + ' lượt chấm.');
