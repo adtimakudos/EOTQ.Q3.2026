@@ -496,7 +496,7 @@ function viewVotes(){
   var leaders = d.users.filter(function(u){ return u.role !== 'admin'; });
   var by = {}; d.votes.forEach(function(v){ (by[v.voterDomain] = by[v.voterDomain] || []).push(v); });
   function cell(v){ return v ? esc(v.candidateName) + ' <span class="muted small">(' + esc(v.candidateUnit) + ')</span><br><span class="small">' + v.c1 + '-' + v.c2 + '-' + v.c3 + '-' + v.c4 + ' = <b>' + v.total + '</b></span><div class="small muted pre" style="margin-top:4px">“' + esc(v.comment) + '”</div>' : '<span class="muted">—</span>'; }
-  return '<div class="stack"><div class="between"><h2 class="sec">Phiếu chấm theo giám khảo</h2><button class="btn btn2" data-act="exportVotes">Export Excel (CSV)</button></div>' +
+  return '<div class="stack"><div class="between"><h2 class="sec">Phiếu chấm theo giám khảo</h2><button class="btn btn2" data-act="exportXlsx">Export Excel (.xlsx)</button> <button class="btn btn2" data-act="exportVotes">CSV thô</button></div>' +
     '<div class="tbl"><table><thead><tr><th>Giám khảo</th><th>Team</th><th>Gửi lúc</th><th>Ứng viên 1 · điểm · lý do</th><th>Ứng viên 2 · điểm · lý do</th></tr></thead><tbody>' +
     leaders.map(function(u){ var v = by[u.domain] || [];
       return '<tr' + (v.length ? '' : ' class="warn"') + '><td><b>' + esc(u.name) + '</b><div class="muted small">' + esc(ROLE[u.role] || '') + ' · ' + esc(u.domain) + '</div></td><td>' + esc(u.unit) + '</td><td>' + (v.length ? fmtTime(v[0].createdAt) : chip('wait','Chưa chấm')) + '</td><td>' + cell(v[0]) + '</td><td>' + cell(v[1]) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
@@ -520,7 +520,7 @@ function viewRank(){
         '<div class="row" style="gap:6px">' + CRIT.map(function(k){ return '<span style="flex:0 0 auto">' + chip('off', k[2].split(' ')[0] + ': ' + v[k[0]] + ' · ' + SCALE[v[k[0]]-1][0]) + '</span>'; }).join('') + '</div>' +
         '<div class="pre small">“' + esc(v.comment) + '”</div></div>'; }).join('') + '</div>' : '<span class="muted small">Chưa có ai chấm ứng viên này.</span>') + '</td></tr>'; }).join('');
   return '<div class="stack"><div class="banner">' + chip('off','Chỉ Admin thấy') + '<p>Bảng xếp hạng cập nhật theo thời gian thực. Leader không xem được trang này.</p></div>' + crit +
-    '<div class="between"><h2 class="sec">Danh sách ứng viên được chấm</h2><div class="row" style="gap:10px;align-items:center"><span class="muted small" style="flex:0 1 auto">Bấm tên ứng viên để xem ai đã chấm, điểm và comment.</span><button class="btn btn2" data-act="exportVotes" style="flex:0 0 auto">Export Excel (CSV)</button></div></div>' +
+    '<div class="between"><h2 class="sec">Danh sách ứng viên được chấm</h2><div class="row" style="gap:10px;align-items:center"><span class="muted small" style="flex:0 1 auto">Bấm tên ứng viên để xem ai đã chấm, điểm và comment.</span><button class="btn btn2" data-act="exportXlsx" style="flex:0 0 auto">Export Excel (.xlsx)</button></div></div>' +
     '<div class="tbl"><table><thead><tr><th>Hạng</th><th>Ứng viên</th><th>Team</th><th>Số lượt vote</th><th>Perf.</th><th>Impact</th><th>Owner.</th><th>Innov.</th><th>Điểm TB' + (s.includeSelf ? ' (gồm tự ĐG)' : '') + '</th><th>Tự đánh giá</th><th>Ghi chú</th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="11" class="muted">Chưa có đề cử.</td></tr>') + '</tbody></table></div></div>';
 }
@@ -611,6 +611,136 @@ function employeeTable(){
 
     '<p class="muted small" style="margin:0">Sửa xong, quota team và mã đăng nhập tự cập nhật. Đổi vai trò sang Team Leader / Sub-TL / Admin sẽ tự tạo mã; khoá người dùng thì họ không đăng nhập được và không tính vào nhân sự team.</p>';
 }
+/* ===== Xuất Excel (.xlsx) thật, không cần thư viện ngoài ===== */
+var XL = (function(){
+  var TB = null, ENC = new TextEncoder();
+  function crc(b){ if (!TB){ TB = []; for (var n = 0; n < 256; n++){ var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; TB[n] = c >>> 0; } } var r = 0xFFFFFFFF; for (var i = 0; i < b.length; i++) r = TB[(r ^ b[i]) & 255] ^ (r >>> 8); return (r ^ 0xFFFFFFFF) >>> 0; }
+  function zip(files){
+    var parts = [], cd = [], off = 0;
+    files.forEach(function(f){
+      var nm = ENC.encode(f.name), d = ENC.encode(f.data), cr = crc(d);
+      var lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(12, 0x21, true);
+      lh.setUint32(14, cr, true); lh.setUint32(18, d.length, true); lh.setUint32(22, d.length, true); lh.setUint16(26, nm.length, true);
+      parts.push(new Uint8Array(lh.buffer), nm, d);
+      var ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(14, 0x21, true);
+      ch.setUint32(16, cr, true); ch.setUint32(20, d.length, true); ch.setUint32(24, d.length, true); ch.setUint16(28, nm.length, true); ch.setUint32(42, off, true);
+      cd.push(new Uint8Array(ch.buffer), nm);
+      off += 30 + nm.length + d.length;
+    });
+    var cdLen = cd.reduce(function(a, p){ return a + p.length; }, 0);
+    var end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cdLen, true); end.setUint32(16, off, true);
+    return new Blob(parts.concat(cd, [new Uint8Array(end.buffer)]), { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  function x(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''); }
+  function col(i){ var s = ''; i++; while (i > 0){ var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+  // style ids
+  var S = { def:0, head:1, text:2, num:3, conv:4, result:5, weight:6, title:7, group:8, avg:9, label:10, note:11, textC:12 };
+  var STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="3"><numFmt numFmtId="164" formatCode="0.0"/><numFmt numFmtId="165" formatCode="&quot;Trọng số &quot;0&quot;%&quot;"/><numFmt numFmtId="166" formatCode="0.00"/></numFmts>' +
+    '<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="15"/><color rgb="FF1D40D0"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF55627F"/><name val="Calibri"/></font></fonts>' +
+    '<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1D40D0"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF1FF"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2C2"/></patternFill></fill></fills>' +
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFCBE6"/></left><right style="thin"><color rgb="FFBFCBE6"/></right><top style="thin"><color rgb="FFBFCBE6"/></top><bottom style="thin"><color rgb="FFBFCBE6"/></bottom><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="13">' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
+    '<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
+    '<xf numFmtId="164" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
+    '<xf numFmtId="165" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>' +
+    '</cellXfs></styleSheet>';
+  function sheetXml(sh){
+    var out = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"' + (sh.tab ? ' tabSelected="1"' : '') + ' showGridLines="0">' +
+      (sh.freeze ? '<pane xSplit="' + sh.freeze[0] + '" ySplit="' + sh.freeze[1] + '" topLeftCell="' + col(sh.freeze[0]) + (sh.freeze[1] + 1) + '" activePane="bottomRight" state="frozen"/>' : '') + '</sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/>' +
+      '<cols>' + sh.cols.map(function(w, i){ return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join('') + '</cols><sheetData>';
+    sh.rows.forEach(function(row, ri){
+      if (!row) return;
+      var cells = row.cells || row;
+      out += '<row r="' + (ri + 1) + '"' + (row.h ? ' ht="' + row.h + '" customHeight="1"' : '') + '>';
+      cells.forEach(function(c, ci){
+        if (c == null) return;
+        if (typeof c !== 'object') c = { v:c };
+        var ref = col(ci) + (ri + 1), st = c.s != null ? ' s="' + c.s + '"' : '';
+        if (c.f != null) out += '<c r="' + ref + '"' + st + '><f>' + x(c.f) + '</f><v>' + c.v + '</v></c>';
+        else if (typeof c.v === 'number') out += '<c r="' + ref + '"' + st + '><v>' + c.v + '</v></c>';
+        else if (c.v === '' || c.v == null) out += '<c r="' + ref + '"' + st + '/>';
+        else out += '<c r="' + ref + '"' + st + ' t="inlineStr"><is><t xml:space="preserve">' + x(c.v) + '</t></is></c>';
+      });
+      out += '</row>';
+    });
+    out += '</sheetData>' + (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map(function(m){ return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>' : '') + '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+    return out;
+  }
+  function build(name, sheets){
+    var files = [
+      { name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets.map(function(s, i){ return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join('') + '</Types>' },
+      { name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' + sheets.map(function(s, i){ return '<sheet name="' + x(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join('') + '</sheets></workbook>' },
+      { name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map(function(s, i){ return '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join('') + '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+      { name:'xl/styles.xml', data:STYLES }
+    ].concat(sheets.map(function(s, i){ s.tab = i === 0; return { name:'xl/worksheets/sheet' + (i + 1) + '.xml', data:sheetXml(s) }; }));
+    var a = document.createElement('a'); a.href = URL.createObjectURL(zip(files)); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  return { build:build, S:S, col:col };
+})();
+function xlTime(s){ var d = new Date(s); return isNaN(d) ? String(s || '') : d.toLocaleString('vi-VN', { timeZone:'Asia/Ho_Chi_Minh', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+function exportResultsXlsx(){
+  var d = S.admin, S_ = XL.S, cyc = d.cycle.cycleName, W = CRIT.map(function(k){ return k[3]; });
+  var rank = {}; d.ranking.forEach(function(r){ rank[r.id] = r.rank; });
+  var votes = d.votes.slice().sort(function(a, b){ return (rank[a.nominationId] || 999) - (rank[b.nominationId] || 999) || String(a.createdAt).localeCompare(String(b.createdAt)); });
+  var stamp = new Date().toLocaleString('vi-VN', { timeZone:'Asia/Ho_Chi_Minh' });
+  /* Sheet 1: chi tiết từng phiếu */
+  var r1 = [];
+  r1[0] = { h:26, cells:[{ v:'Employee of the Quarter ' + cyc + ' · Chi tiết phiếu bình chọn', s:S_.title }] };
+  r1[1] = { h:30, cells:[{ v:'Điểm quy đổi = điểm (1–5) ÷ 5 × trọng số. Kết quả = tổng điểm quy đổi của 4 tiêu chí (thang 100). Xuất lúc ' + stamp + '.', s:S_.note }] };
+  var head = ['STT','Ứng viên','Team ứng viên','Giám khảo','Team giám khảo'];
+  var cols = [6, 24, 20, 26, 20, 11, 11, 11, 11, 11, 11, 11, 11, 11, 60, 17];
+  r1[2] = { h:34, cells:head.map(function(h){ return { v:h, s:S_.head }; }) };
+  r1[3] = { h:20, cells:[null, null, null, null, null] };
+  r1[4] = { h:34, cells:[null, null, null, null, null] };
+  CRIT.forEach(function(k, i){ r1[2].cells.push({ v:k[2], s:S_.group }, { v:'', s:S_.group }); r1[3].cells.push({ v:W[i], s:S_.weight }, { v:'', s:S_.weight }); r1[4].cells.push({ v:'Điểm (1–5)', s:S_.head }, { v:'Quy đổi', s:S_.head }); });
+  r1[2].cells.push({ v:'Kết quả (/100)', s:S_.head }, { v:'Comment / lý do chấm', s:S_.head }, { v:'Gửi lúc', s:S_.head });
+  var m1 = ['A2:P2','A3:A5','B3:B5','C3:C5','D3:D5','E3:E5','F3:G3','H3:I3','J3:K3','L3:M3','F4:G4','H4:I4','J4:K4','L4:M4','N3:N5','O3:O5','P3:P5'];
+  var wcell = ['$F$4','$H$4','$J$4','$L$4'];
+  votes.forEach(function(v, i){
+    var rn = 6 + i, sc = [v.c1, v.c2, v.c3, v.c4].map(Number), conv = sc.map(function(s, j){ return s / 5 * W[j]; });
+    var tot = Math.round(conv.reduce(function(a, b){ return a + b; }, 0) * 10) / 10;
+    var cells = [{ v:i + 1, s:S_.num }, { v:v.candidateName, s:S_.text }, { v:v.candidateUnit, s:S_.text }, { v:v.voterName + (v.voterDomain ? ' (' + v.voterDomain + ')' : ''), s:S_.text }, { v:v.voterUnit, s:S_.text }];
+    sc.forEach(function(s, j){ var sc_ = XL.col(5 + j * 2), cc = XL.col(6 + j * 2); cells.push({ v:s, s:S_.num }, { f:sc_ + rn + '/5*' + wcell[j], v:conv[j], s:S_.conv }); });
+    cells.push({ f:'ROUND(G' + rn + '+I' + rn + '+K' + rn + '+M' + rn + ',1)', v:tot, s:S_.result }, { v:v.comment || '', s:S_.text }, { v:xlTime(v.createdAt), s:S_.textC });
+    r1[5 + i] = cells;
+  });
+  if (!votes.length) r1[5] = [{ v:'Chưa có phiếu bình chọn nào.', s:S_.note }];
+  /* Sheet 2: kết quả xếp hạng */
+  var r2 = [], cols2 = [7, 26, 22, 28, 11, 14, 14, 14, 14, 15, 13, 34];
+  r2[0] = { h:26, cells:[{ v:'Employee of the Quarter ' + cyc + ' · Kết quả xếp hạng', s:S_.title }] };
+  r2[1] = { h:30, cells:[{ v:'Xếp hạng theo: 1) số lượt vote, 2) điểm TB (thang 100), 3) điểm Impact. Điểm TB tiêu chí là thang 1–5.' + (d.settingsRaw && d.settingsRaw.includeSelf ? ' Điểm TB có tính cả điểm tự đánh giá của team đề cử.' : '') + ' Xuất lúc ' + stamp + '.', s:S_.note }] };
+  r2[2] = { h:22, cells:[{ v:'Trọng số tiêu chí', s:S_.label }, { v:'', s:S_.label }, { v:'', s:S_.label }, { v:'', s:S_.label }, { v:'', s:S_.label }].concat(W.map(function(w){ return { v:w, s:S_.weight }; }), [{ v:100, s:S_.weight }, { v:'', s:S_.label }, { v:'', s:S_.label }]) };
+  r2[3] = { h:46, cells:['Hạng','Ứng viên','Team','Title','Số lượt vote'].concat(CRIT.map(function(k){ return k[2] + ' (TB 1–5)'; }), ['Kết quả (điểm TB /100)','Tự đánh giá (/100)','Ghi chú']).map(function(h){ return { v:h, s:S_.head }; }) };
+  d.ranking.forEach(function(r, i){
+    var tie = d.ranking.some(function(o){ return o !== r && o.judges === r.judges && o.score === r.score; }), tieV = d.ranking.some(function(o){ return o !== r && o.judges === r.judges; });
+    var note = !r.judges ? 'Chưa có ai chấm' : (r.rank === 1 ? 'Dẫn đầu' : '') + (tie ? (r.rank === 1 ? '; ' : '') + 'Hoà → xét Impact' : tieV ? (r.rank === 1 ? '; ' : '') + 'Bằng lượt vote → xét điểm TB' : '');
+    r2[4 + i] = [{ v:r.rank, s:S_.num }, { v:r.candidateName, s:S_.text }, { v:r.unit, s:S_.text }, { v:r.title, s:S_.text }, { v:r.judges, s:S_.num },
+      { v:r.judges ? r.avg.c1 : '', s:S_.avg }, { v:r.judges ? r.avg.c2 : '', s:S_.avg }, { v:r.judges ? r.avg.c3 : '', s:S_.avg }, { v:r.judges ? r.avg.c4 : '', s:S_.avg },
+      r.judges ? { v:r.score, s:S_.result } : { v:'', s:S_.result }, r.selfScore == null ? { v:'', s:S_.num } : { v:r.selfScore, s:S_.avg }, { v:note, s:S_.text }];
+  });
+  if (!d.ranking.length) r2[4] = [{ v:'Chưa có đề cử.', s:S_.note }];
+  XL.build('ket-qua-binh-chon-' + String(cyc).replace(/\W+/g, '-') + '.xlsx', [
+    { name:'Chi tiết phiếu', cols:cols, rows:r1, merges:m1, freeze:[2, 5] },
+    { name:'Kết quả xếp hạng', cols:cols2, rows:r2, merges:['A2:L2','A3:E3'], freeze:[2, 4] }
+  ]);
+}
+
 function csv(name, rows){
   var s = '﻿' + rows.map(function(r){ return r.map(function(v){ v = String(v == null ? '' : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([s], { type:'text/csv;charset=utf-8' })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -660,6 +790,7 @@ var ACT = {
   review: function(el){ var st = el.dataset.s; var note = (document.getElementById('hrnote') || {}).value;
     if (st === 'hidden' && !String(note || '').trim()) { toast('Nhập ghi chú để leader biết lý do ẩn.'); var t = document.getElementById('hrnote'); if (t) t.focus(); return; }
     busy(el, true); api('adminReview', { id: S.selNom, status: st, note: note }, true).then(function(d){ S.admin = d; S.adminAt = Date.now(); refresh(); toast(st === 'approved' ? 'Đã hiện lại đề cử.' : 'Đã ẩn đề cử.'); }).catch(function(e){ busy(el, false); toast(e.message); }); },
+  exportXlsx: function(){ try { exportResultsXlsx(); } catch (e) { toast('Không xuất được Excel: ' + e.message); } },
   exportVotes: function(){ var d = S.admin; csv('phieu-cham-' + d.cycle.cycleName.replace(/\W+/g, '-') + '.csv', [['Giám khảo','Domain','Team giám khảo','Ứng viên','Team ứng viên','Performance','Impact','Ownership','Innovation','Tổng /100','Lý do','Gửi lúc']].concat(d.votes.map(function(v){ return [v.voterName, v.voterDomain, v.voterUnit, v.candidateName, v.candidateUnit, v.c1, v.c2, v.c3, v.c4, v.total, v.comment, fmtTime(v.createdAt)]; }))); },
   exportUsers: function(){ csv('leader-ma-dang-nhap.csv', [['Họ tên','Domain','Vai trò','Team','Mã đăng nhập']].concat(S.admin.users.map(function(u){ return [u.name, u.domain, ROLE[u.role] || u.role, u.unit, u.accessCode]; }))); },
   peek: function(el){ S.peek[el.dataset.id] = !S.peek[el.dataset.id]; refresh(); },
